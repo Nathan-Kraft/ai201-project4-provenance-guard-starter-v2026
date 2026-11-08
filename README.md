@@ -142,13 +142,20 @@ A submission moves through seven stages:
      diagnostics. -->
 
 ```bash
-$ curl -X POST http://127.0.0.1:5000/submit \
+$ curl.exe -X POST http://127.0.0.1:5000/submit \
   -H "Content-Type: application/json" \
-  -d '{"text": "...", "creator_id": "..."}'
+  -d "{\"text\": \"The implementation of the proposed framework requires careful consideration of several key factors.\", \"creator_id\": \"nate\"}"
 ```
 
 ```json
-
+{
+  "confidence": 0.5,
+  "content_id": "c_ca8c7c977e83",
+  "guess": "unsure",
+  "label": "Not built yet",
+  "model_score": 0.5563,
+  "style_score": null
+}
 ```
 
 **An appeal**
@@ -166,12 +173,43 @@ $ curl -X POST http://127.0.0.1:5000/appeal \
 **What the log shows afterwards**
 
 ```bash
-$ curl "http://127.0.0.1:5000/log?limit=3"
+$ curl.exe "http://127.0.0.1:5000/log?limit=5"
 ```
 
 ```json
-
+{
+  "count": 2,
+  "entries": [
+    {
+      "combined_score": null,
+      "content_id": "c_723e06831389",
+      "creator_id": "nate",
+      "guess": null,
+      "label": null,
+      "model_score": 0.3046,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-11-08T07:22:47+00:00"
+    },
+    {
+      "combined_score": null,
+      "content_id": "c_ca8c7c977e83",
+      "creator_id": "nate",
+      "guess": "unsure",
+      "label": null,
+      "model_score": 0.5563,
+      "status": "decided",
+      "style_score": null,
+      "timestamp": "2026-11-08T07:34:01+00:00"
+    }
+  ]
+}
 ```
+
+<!-- Note: the first entry above (c_723e06831389) was logged before the
+     `guess` field was wired into the log_decision call, hence guess: null
+     there vs "unsure" on the second. Both are real output from this
+     session, pasted as-is. -->
 
 ---
 
