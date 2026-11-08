@@ -8,6 +8,7 @@ __pycache__/
 .venv/
 venv/
 env/
+.session_summary/
 
 # Hugging Face model cache
 .cache/
