@@ -54,8 +54,16 @@ DETECTOR_MAX_TOKENS = 400
 # down BEFORE you code it, and to put the numbers in your README. Whatever you
 # decide, it goes here.
 
-WEIGHT_MODEL_SIGNAL = 0.5
-WEIGHT_STYLE_SIGNAL = 0.5
+WEIGHT_MODEL_SIGNAL = 0.65
+WEIGHT_STYLE_SIGNAL = 0.35
+
+# How far apart the two signals can be before this counts as genuine
+# disagreement rather than a close call. Above this gap, the combined
+# score is forced to 0.5 (unsure) instead of using the weighted average.
+# 0.4 is set above the largest gap seen in Milestone 4 testing (0.30, on
+# the "evasion_typos" sample), so it's reserved for a split more extreme
+# than anything observed so far.
+DISAGREEMENT_GAP_THRESHOLD = 0.4
 
 
 # ─── Thresholds (Milestone 5) ────────────────────────────────────────────────

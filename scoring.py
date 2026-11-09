@@ -49,10 +49,25 @@ def combine_signals(model_score: float, style_score: float) -> float:
       - Milestone 4 asks you to find a case where your two signals split and
         write it down. That case is what this rule exists to handle.
 
+        The split case found: the "evasion_typos" sample, where
+        model_score is 0.2323 (leans human, since typos read as
+        surprising to the model) versus style_score 0.5299 (leans AI,
+        since the typos don't disturb sentence rhythm or vocabulary
+        variety enough to move this measure). The two signals point in
+        opposite directions. Does this rule treat that as genuine
+        uncertainty (average toward "unsure"), or does one signal win
+        when they conflict? And separately: across every sample tried,
+        style_score never strays far from 0.5 while model_score swings
+        widely. Does a signal that barely moves deserve equal weight with
+        one that does?
+
     The weights in config.py are placeholders. Change them, or ignore them and
     write a different rule.
     """
-    # TODO: replace this
+    gap = abs(model_score - style_score)
+    if gap > config.DISAGREEMENT_GAP_THRESHOLD:
+        return 0.5
+
     return (
         config.WEIGHT_MODEL_SIGNAL * model_score
         + config.WEIGHT_STYLE_SIGNAL * style_score

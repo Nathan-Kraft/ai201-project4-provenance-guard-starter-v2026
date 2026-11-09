@@ -215,6 +215,15 @@ def submit():
     import detector
     model_score=detector.model_signal(text)
 
+    # step 5 - the second signal, tested on its own from the terminal first.
+    # python stylometry.py "some text"
+    import stylometry
+    style_score = stylometry.style_signal(text)
+
+    # step 6 - combine both signals into one score.
+    import scoring
+    combined_score = scoring.combine_signals(model_score, style_score)
+
     #step 4 - log the decision. The content_id is what /appeaal needs later,
         #and a student who skips it rebuilds this whole flow later. Use audit.log_decision(...). Log every submission, even the ones that fail validation.
     content_id = f"c_{uuid.uuid4().hex[:12]}"
@@ -223,9 +232,11 @@ def submit():
         creator_id=creator_id,
         guess="unsure",
         model_score=model_score,
+        style_score=style_score,
+        combined_score=combined_score,
         status="decided",
     )
-    
+
    #step 1 - the route answers. Return a hardcoded response. Confirm `curl` gets it back before you add any logic at all.
     return jsonify({
         "content_id": content_id,
@@ -233,7 +244,7 @@ def submit():
         "confidence": 0.5,
         "label": "Not built yet",
         "model_score": model_score,
-        "style_score": None,
+        "style_score": style_score,
 
     }), 200
 

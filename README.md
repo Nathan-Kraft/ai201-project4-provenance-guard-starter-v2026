@@ -87,6 +87,32 @@ A submission moves through seven stages:
 
 **What it can't see:** It can't read. It has no idea what the text actually says, only what shape it's in. So anything that changes the shape without touching the meaning moves the score. Toss in a typo, break a sentence in half, paste in a quote. All cheap, all deliberate, and exactly what the attack set next unit is built to try.
 
+### A calibration false positive
+
+Milestone 4's four calibration inputs (clearly AI, clearly human, formal
+human, lightly-edited AI) turned up a real false positive on the formal
+human sample - a passage from a conducting textbook describing baton
+technique. Both signals and their blind spots above are not abstract:
+
+- **model_score: 0.7418** (leans AI). The passage explains a procedure
+  in short, plain, declarative sentences built from common words -
+  exactly the "predictable to a language model" blind spot named above,
+  regardless of who wrote it.
+- **style_score: 0.6539** (leans AI). Breaking this down:
+  `sentence_length_spread` = 0.1584 raw (fairly even sentence lengths,
+  reads as AI-ish), `type_token_ratio` = 0.5902 raw (varied vocabulary,
+  correctly reads as human-ish), `punctuation_density` = 0.0145 raw
+  (plain punctuation, reads as AI-ish). Two of the three measures
+  misfire here, and the one that got it right is outvoted.
+- **combined_score: 0.7110**, above `AI_THRESHOLD` (0.65), so this
+  genuinely human, formally written passage is labeled high-confidence
+  AI.
+
+This is not a bug. It is the blind spots named in both signals above,
+triggering on the same piece of text at the same time: plain,
+procedural, explanatory writing is exactly what both signals mistake
+for machine output.
+
 ### The combining rule
 
 <!-- Write the rule in words, then give the numbers. What happens when the two
@@ -94,7 +120,24 @@ A submission moves through seven stages:
 
 **The rule:**
 
+Both signals are 0-1 scores where higher means more likely AI. If they
+disagree by more than a set amount, that counts as a genuine split
+rather than a close call, and the combined score is forced to 0.5
+(unsure) instead of being averaged. Otherwise, the combined score is a
+weighted average of the two, with the model signal weighted more
+heavily than the style signal.
+
 **The numbers:**
+
+- `WEIGHT_MODEL_SIGNAL = 0.65`
+- `WEIGHT_STYLE_SIGNAL = 0.35`
+- `DISAGREEMENT_GAP_THRESHOLD = 0.4` (if `abs(model_score - style_score)`
+  is above this, the combined score is forced to 0.5 instead of averaged)
+
+Model gets more weight than style because testing across six samples
+showed style_score staying close to 0.5 on every one of them
+(0.31-0.54), while model_score moved widely (0.23-0.89). A signal that
+barely moves shouldn't carry equal weight with one that does.
 
 **Where it lives:** `scoring.py::combine_signals`
 
@@ -103,6 +146,13 @@ A submission moves through seven stages:
 
 **A case where my two signals split, and what my rule does with it:**
 
+The "evasion_typos" sample: model_score 0.2323 (leans human),
+style_score 0.5299 (leans AI). The gap between them is 0.2976, under the
+0.4 threshold, so the rule falls back to the weighted average instead of
+forcing unsure. That average lands at 0.3365, below HUMAN_THRESHOLD
+(0.35), so the combined guess reads as human: the model signal's
+stronger lean toward human outweighs the style signal's weak lean
+toward AI.
 
 
 ---
