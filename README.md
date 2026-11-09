@@ -350,31 +350,19 @@ An unknown content_id returns 404:
 }
 ```
 
-### Stretch: A third signal (burstiness)
+### A third signal (not pursued)
 
-**Declared before building:** adds a third 0-1 score, `burstiness_signal`,
-measuring how much the text's local predictability varies, rather than its
-average (which `detector.model_signal` already measures). Splits the text
-into sentences, runs each one through the same gpt2 perplexity measurement
-used in signal one, and takes the variance across those per-sentence
-readings. Human writing tends to swing between very predictable and very
-surprising sentences; AI output tends to stay uniformly smooth. Blind
-spot: fewer than two sentences gives no variance to measure, and a short
-submission's reading will be noisy regardless of the text.
-
-(This replaces a specificity signal declared and partly built first -
-counting numerals and proper nouns per word. Calibration testing showed it
-saturated to the most extreme "AI" reading on nearly every sample lacking
-a name or a number, including plainly human and even deliberately AI
-samples, which worked against the project's priority of minimizing false
-accusations. Dropped before it was wired into `combine_signals`.)
-
-Combined into `scoring.py::combine_signals` alongside the existing two
-signals: the same weighted-average-with-disagreement-override shape,
-extended to three weights that sum to 1. Exact weights will be set by
-calibration against the existing sample set, the same way
-`WEIGHT_MODEL_SIGNAL`/`WEIGHT_STYLE_SIGNAL` were, and documented here once
-chosen.
+A third signal was attempted twice: first specificity (numerals and
+proper nouns per word), then burstiness (variance in per-sentence
+perplexity). Both were declared and calibration-tested before being
+wired into `combine_signals`. Specificity saturated to the most extreme
+AI reading on nearly every sample lacking a name or number in it,
+including human and AI samples alike. Burstiness avoided that saturation
+problem but didn't rank the calibration samples in a sensible order
+(`clearly_ai` scored less AI-like than `lightly_edited_ai`), so a low
+weight would have made it harmless but also uninformative. Dropped in
+favor of spending the remaining time on Unit 8's required work. Full
+detail in git history.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
