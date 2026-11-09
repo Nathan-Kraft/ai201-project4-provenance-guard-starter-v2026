@@ -284,15 +284,59 @@ $ curl.exe "http://127.0.0.1:5000/log?limit=2"
 
 **Moment 1**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* Help designing `combine_signals` after finding a split
+  case (the evasion_typos sample, where model_score leaned human and
+  style_score leaned AI). I wanted a way to weight the two signals that
+  accounted for how much they disagreed.
+- *What came back:* A continuous, disagreement-dependent weighting formula,
+  where the gap between the two signals would scale their relative weight.
+- *What I changed:* Decided against the continuous formula, since no single
+  fixed weight could give both "the model signal carries more weight on
+  close calls" and "opposite extremes count as unsure" at the same time.
+  Used a simpler two-part rule instead: a plain weighted average normally,
+  with a hard override to 0.5 when the gap exceeds
+  `DISAGREEMENT_GAP_THRESHOLD`.
 
 **Moment 2**
 
-- *What I asked for:*
-- *What came back:*
-- *What I changed:*
+- *What I asked for:* To wire `detector.model_signal` into `/submit` using
+  the existing draft of the route.
+- *What came back:* A version with validation, the detector call, and the
+  audit log call present, but in the wrong order. The detector call and
+  audit log ran before the missing/empty `text` check, so a bad request
+  would hit `detector.model_signal(None)` before the 400 check ever ran.
+- *What I changed:* Reordered the route so validation runs first and
+  returns 400 immediately, before the detector or audit log ever execute.
+
+## Stretch Features
+
+### Stretch: `GET /content/<id>`
+
+**Declared before building:** adds a read-only endpoint that returns one
+submission's current status by `content_id`. It looks up the most recent
+entry for that id in the audit log (the original decision, or
+`under_review` if an appeal was filed) without re-running either signal.
+Returns 404 for an unknown `content_id`, matching `/appeal`'s existing
+behavior.
+
+### Stretch: A third signal (specificity)
+
+**Declared before building:** adds a third 0-1 score, `specificity_signal`,
+measuring how much concrete, idiosyncratic detail a text contains: counts
+of numerals and proper nouns (excluding sentence-initial capitals), per
+word. Low specificity (vague, generic language) reads as more AI-like;
+high specificity (names, numbers, specific terms) reads as more human-like,
+even in formal or technical writing. Blind spot: short texts and
+submissions on inherently abstract topics will have little to count either
+way, and a writer who pads generic text with random numbers or names could
+cheaply inflate this score.
+
+Combined into `scoring.py::combine_signals` alongside the existing two
+signals: the same weighted-average-with-disagreement-override shape,
+extended to three weights that sum to 1. Exact weights will be set by
+calibration against the existing sample set, the same way
+`WEIGHT_MODEL_SIGNAL`/`WEIGHT_STYLE_SIGNAL` were, and documented here once
+chosen.
 
 <!-- ═══════════════════════ UNIT 8 — THE TEST ═══════════════════════ -->
 
