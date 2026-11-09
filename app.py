@@ -224,25 +224,29 @@ def submit():
     import scoring
     combined_score = scoring.combine_signals(model_score, style_score)
 
+    # step 8 - turn the combined score into a guess and a reader-facing label.
+    guess, label_text = scoring.score_to_label(combined_score)
+
     #step 4 - log the decision. The content_id is what /appeaal needs later,
         #and a student who skips it rebuilds this whole flow later. Use audit.log_decision(...). Log every submission, even the ones that fail validation.
     content_id = f"c_{uuid.uuid4().hex[:12]}"
     audit.log_decision(
         content_id=content_id,
         creator_id=creator_id,
-        guess="unsure",
+        guess=guess,
         model_score=model_score,
         style_score=style_score,
         combined_score=combined_score,
+        label=label_text,
         status="decided",
     )
 
    #step 1 - the route answers. Return a hardcoded response. Confirm `curl` gets it back before you add any logic at all.
     return jsonify({
         "content_id": content_id,
-        "guess": "unsure",
+        "guess": guess,
         "confidence": 0.5,
-        "label": "Not built yet",
+        "label": label_text,
         "model_score": model_score,
         "style_score": style_score,
 
@@ -269,14 +273,37 @@ def appeal():
     wrong accusation and nothing at all.
     """
     payload = request.get_json(silent=True) or {}
+    content_id = payload.get("content_id")
+    reasoning = payload.get("reasoning")
 
-    # TODO: delete this and build the route.
+    if not isinstance(content_id, str) or not content_id.strip():
+        return jsonify({
+            "error": "bad_request",
+            "message": "Send JSON with a non-empty \"content_id\".",
+        }), 400
+
+    if not isinstance(reasoning, str) or not reasoning.strip():
+        return jsonify({
+            "error": "bad_request",
+            "message": "Send JSON with a non-empty \"reasoning\".",
+        }), 400
+
+    entries = audit.entries_for(content_id)
+
+    if not entries:
+        return jsonify({
+            "error": "not_found",
+            "message": f"No submission found with content_id {content_id!r}."
+        }), 404
+
+    creator_id = entries[0].get("creator_id", "unknown")
+    audit.log_appeal(content_id=content_id, creator_id=creator_id, reasoning=reasoning)
+
     return jsonify({
-        "error": "not_implemented",
-        "message": "POST /appeal isn't built yet — see the TODO in app.py.",
-        "you_sent": payload,
-    }), 501
-
+        "content_id": content_id,
+        "status": "under_review",
+        "message": "Your appeal has been recorded. A person will review this submission."
+    }), 200
 
 # ── Already works ─────────────────────────────────────────────────────────────
 
