@@ -305,6 +305,39 @@ def appeal():
         "message": "Your appeal has been recorded. A person will review this submission."
     }), 200
 
+@app.get("/content/<content_id>")
+def get_content(content_id):
+    """
+    One submission's current status. ← Stretch feature
+
+    Looks up the most recent entries for content_id in the audit log and
+    reports where that submission stands now: the original guess/label/
+    scores from its decision entry, and its current status (under_review
+    if it's been appealed, decided otherwise). Does not re-run either
+    signal.
+    """
+    entries = audit.entries_for(content_id)
+
+    if not entries:
+        return jsonify({
+            "error": "not_found",
+            "message": f"No submission found with content_id {content_id!r}."
+        }), 404
+
+    decision_entries = [e for e in entries if e.get("event") != "appeal"]
+    decision = decision_entries[-1]
+
+    return jsonify({
+        "content_id": content_id,
+        "status": entries[-1].get("status"),
+        "guess": decision.get("guess"),
+        "label": decision.get("label"),
+        "model_score": decision.get("model_score"),
+        "style_score": decision.get("style_score"),
+        "combined_score": decision.get("combined_score"),
+    }), 200
+
+
 # ── Already works ─────────────────────────────────────────────────────────────
 
 @app.get("/log")
