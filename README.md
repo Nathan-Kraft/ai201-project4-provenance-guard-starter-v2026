@@ -370,7 +370,7 @@ detail in git history.
 
 ## Rate Limiting
 
-**My limits:** ___ per minute, ___ per day
+**My limits:** 5 per minute, 50 per day
 
 **Why those numbers and not others:**
 <!-- Think about two people: a real writer submitting their own work a few
@@ -378,9 +378,13 @@ detail in git history.
      thresholds. Your numbers have to be liveable for the first and hostile to
      the second. -->
 
+If a person was submitting their work they probably wouldn't have more than 50 a day, as well as they would be only submitting a few an hour. Which should keep them well under the 5 per minute rule. A script that sends thousand variations gets cut off after 5 requests in a minute, so it can't gather much data before being throttled.
+
 **What a caller counts as:** <!-- per address, or per creator_id? They fail
 differently — one script can look like a thousand callers, and one household
 can look like one. -->
+
+Per `creator_id`, not per IP address. `rate_limit_key` in app.py reads `creator_id` from the request body and keys the limit on that, only falling back to the caller's IP address if `creator_id` is missing or not a string. This matters because a script can rotate IPs but still count as one caller if it reuses a `creator_id`, while a household sharing one IP isn't throttled as a single caller.
 
 **The run of status codes when I pushed past it:**
 
@@ -388,7 +392,36 @@ can look like one. -->
 
 ```
 
+15 submissions as 'flood_tester' against http://127.0.0.1:5000
+The first one is slow while the model loads.
+
+  [ 1/15] 200
+  [ 2/15] 200
+  [ 3/15] 200
+  [ 4/15] 200
+  [ 5/15] 200
+  [ 6/15] 429
+  [ 7/15] 429
+  [ 8/15] 429
+  [ 9/15] 429
+  [10/15] 429
+  [11/15] 429
+  [12/15] 429
+  [13/15] 429
+  [14/15] 429
+  [15/15] 429
+
+============================================================
+200 200 200 200 200 429 429 429 429 429 429 429 429 429 429
+============================================================
+
+10 of 15 were rate limited.
 ```
+
+Note: this run was logged before the audit log fix below — its rejected
+entries in logs/audit.jsonl are missing the decision fields (content_id,
+guess, model_score, style_score, combined_score, label). A later run shows
+rejected entries with all nine fields present as null.
 
 ---
 
