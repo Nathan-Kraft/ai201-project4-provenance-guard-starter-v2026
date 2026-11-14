@@ -430,20 +430,95 @@ rejected entries with all nine fields present as null.
 <!-- Every attack with its outcome and a held-or-broke mark.
      `run_attacks.py --label before` produces the table. -->
 
+| ID | Family | Targeting | Status | Content ID | Guess | Score | Verdict |
+|---|---|---|---|---|---|---|---|
+| EV01 | evasion | signal two: typos raise word variety | 200 | `c_89d203bf5bcf` | unsure | 0.500 | HELD |
+| EV02 | evasion | signal two: broken-up sentences raise length spread | 200 | `c_02fa97168856` | unsure | 0.500 | HELD |
+| EV03 | evasion | signal two: a pasted quotation changes the shape | 200 | `c_7ad2a3623c1b` | unsure | 0.500 | HELD |
+| EV04 | evasion | signal one: unusual words raise perplexity | 200 | `c_a7317d8fe33d` | unsure | 0.500 | HELD |
+| EV05 | evasion | both signals: heavy human editing pass | 200 | `c_1c17ace0a0a9` | unsure | 0.500 | HELD |
+| EV06 | evasion | signal two: one very long sentence and one very short | 200 | `c_8d0bbbc1f2b4` | unsure | 0.500 | HELD |
+| EV07 | evasion | signal two: padding with punctuation | 200 | `c_cf9b98ae20ab` | unsure | 0.500 | HELD |
+| EV08 | evasion | signal one: text below the token window | 200 | `c_5c51d32f1116` | unsure | 0.500 | HELD |
+| EV09 | evasion | both: AI text with a human opening paragraph bolted on | 200 | `c_47e51130e501` | unsure | 0.500 | HELD |
+| EV10 | evasion | signal two: repeated stanza structure | 200 | `c_3db7ebe693ee` | ai | 0.500 | HELD |
+| FP01 | false_positive | plain, clear human writing with no flourishes | 200 | `c_8a5d571092a8` | unsure | 0.500 | HELD |
+| FP02 | false_positive | human writing in a formal register | 200 | `c_1e9c7392b68e` | ai | 0.500 | BROKE |
+| FP03 | false_positive | a non-native English speaker writing carefully | 200 | `c_db651cd2b649` | ai | 0.500 | BROKE |
+| FP04 | false_positive | a student essay written to a rubric | 200 | `c_6d2545e920e2` | ai | 0.500 | BROKE |
+| FP05 | false_positive | technical documentation written by a person | 200 | `c_e7dd9bb93920` | ai | 0.500 | BROKE |
+| FP06 | false_positive | a person imitating a formal template | 200 | `c_34d38d2624ef` | ai | 0.500 | BROKE |
+| FP07 | false_positive | human writing that repeats a phrase deliberately | 200 | `c_d472a0a8ddc3` | ai | 0.500 | BROKE |
+| FP08 | false_positive | very short genuine human submission | 200 | `c_651fbf18adbd` | unsure | 0.500 | HELD |
+| PI01 | prompt_injection | instruction to ignore the check | 200 | `c_4b89e789dd26` | unsure | 0.500 | HELD |
+| PI02 | prompt_injection | instruction disguised as a system message | 200 | `c_cd7059b968a9` | human | 0.500 | BROKE |
+| PI03 | prompt_injection | instruction wrapped in the writer's voice | 200 | `c_4523edd4b79f` | unsure | 0.500 | HELD |
+| PI04 | prompt_injection | attempt to make the label text hostile | 200 | `c_b57e1017241b` | unsure | 0.500 | HELD |
+| PI05 | prompt_injection | attempt to inject into the audit log | 200 | `c_3dad31aa5562` | unsure | 0.500 | HELD |
+| PI06 | prompt_injection | instruction plus real human text | 200 | `c_5b1d6baca6c7` | unsure | 0.500 | HELD |
+| MF01 | malformed | text is only whitespace | 400 | `—` | — | — | HELD |
+| MF02 | malformed | text is a single character | 500 | `—` | — | — | BROKE |
+| MF03 | malformed | text is control characters | 200 | `c_891c35e06447` | unsure | 0.500 | HELD |
+| MF04 | malformed | text is only punctuation | 200 | `c_f0b95ae7b277` | unsure | 0.500 | HELD |
+| MF05 | malformed | text is a very long single word | 200 | `c_b3be8d665dc0` | ai | 0.500 | HELD |
+| MF06 | malformed | text is emoji only | 200 | `c_cc78d8967938` | ai | 0.500 | HELD |
+| MF07 | malformed | text is right-to-left script | 200 | `c_7056a71f657b` | ai | 0.500 | BROKE |
+| MF08 | malformed | text is 60,000 characters | 200 | `c_6589cbf90dfc` | ai | 0.500 | BROKE |
+| RQ01 | malformed | no text field at all | 400 | `—` | — | — | HELD |
+| RQ02 | malformed | no creator_id | 200 | `c_c3f163db5a44` | unsure | 0.500 | HELD |
+| RQ03 | malformed | text is a number | 400 | `—` | — | — | HELD |
+| RQ04 | malformed | text is a list | 400 | `—` | — | — | HELD |
+| RQ05 | malformed | text is null | 400 | `—` | — | — | HELD |
+| RQ06 | malformed | creator_id is an object | 200 | `c_0486ee09a260` | unsure | 0.500 | HELD |
+| RQ07 | malformed | body is a JSON array, not an object | 500 | `—` | — | — | BROKE |
+| RQ08 | malformed | body is unparseable JSON | 400 | `—` | — | — | HELD |
+| RQ09 | malformed | body is empty | 400 | `—` | — | — | HELD |
+| RQ10 | malformed | body is form-encoded, not JSON | 429 | `—` | — | — | N/A — blocked by the rate limiter before the route ran |
+| RQ11 | malformed | body is JSON claiming to be plain text | 429 | `—` | — | — | N/A — blocked by the rate limiter before the route ran |
+| RQ12 | malformed | deeply nested JSON | 400 | `—` | — | — | HELD |
+| FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_6cc66865b58d` | unsure | 0.500 | HELD |
+| FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_4b7f541eccff` | unsure | 0.500 | HELD |
+| FL01_03 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_f88f0854cad5` | unsure | 0.500 | HELD |
+| FL01_04 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_e98d968c8b62` | unsure | 0.500 | HELD |
+| FL01_05 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_63d4cb6000e8` | unsure | 0.500 | HELD |
+| FL01_06 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_07 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_08 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_09 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_10 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
 
+11 BROKE, 2 N/A (blocked by the rate limiter before the route ran), 43 HELD.
 
 **Ten audit log entries from the run**
 
 <!-- Choose entries that show the interesting failures, not the ten easiest. -->
 
 ```json
-
+{"timestamp": "2026-11-13T22:59:06+00:00", "content_id": "c_1e9c7392b68e", "creator_id": "attacker_FP02", "guess": "ai", "model_score": 0.7387, "style_score": 0.6690652288553305, "combined_score": 0.7143278300993657, "label": "Our system's best guess is that this was generated by AI, not written by a person.", "status": "decided"}
+{"timestamp": "2026-11-13T22:59:06+00:00", "content_id": "c_db651cd2b649", "creator_id": "attacker_FP03", "guess": "ai", "model_score": 0.8051, "style_score": 0.6496398516315162, "combined_score": 0.7506889480710307, "label": "Our system's best guess is that this was generated by AI, not written by a person.", "status": "decided"}
+{"timestamp": "2026-11-13T22:59:06+00:00", "content_id": "c_6d2545e920e2", "creator_id": "attacker_FP04", "guess": "ai", "model_score": 0.8329, "style_score": 0.5931167816382161, "combined_score": 0.7489758735733756, "label": "Our system's best guess is that this was generated by AI, not written by a person.", "status": "decided"}
+{"timestamp": "2026-11-13T22:59:06+00:00", "content_id": "c_e7dd9bb93920", "creator_id": "attacker_FP05", "guess": "ai", "model_score": 0.8005, "style_score": 0.6785390272349948, "combined_score": 0.7578136595322482, "label": "Our system's best guess is that this was generated by AI, not written by a person.", "status": "decided"}
+{"timestamp": "2026-11-13T22:59:07+00:00", "content_id": "c_34d38d2624ef", "creator_id": "attacker_FP06", "guess": "ai", "model_score": 0.8814, "style_score": 0.5632679282571954, "combined_score": 0.7700537748900185, "label": "Our system's best guess is that this was generated by AI, not written by a person.", "status": "decided"}
+{"timestamp": "2026-11-13T22:59:07+00:00", "content_id": "c_d472a0a8ddc3", "creator_id": "attacker_FP07", "guess": "ai", "model_score": 0.8816, "style_score": 0.5640190465472043, "combined_score": 0.7704466662915216, "label": "Our system's best guess is that this was generated by AI, not written by a person.", "status": "decided"}
+{"timestamp": "2026-11-13T22:59:07+00:00", "content_id": "c_cd7059b968a9", "creator_id": "attacker_PI02", "guess": "human", "model_score": 0.2044, "style_score": 0.42279527511411846, "combined_score": 0.2808383462899414, "label": "Our system's best guess is that this was written by a person, not generated by AI.", "status": "decided"}
+{"timestamp": "2026-11-13T22:59:08+00:00", "content_id": "c_7056a71f657b", "creator_id": "attacker_MF07", "guess": "ai", "model_score": 0.9064, "style_score": 1.0, "combined_score": 0.93916, "label": "Our system's best guess is that this was generated by AI, not written by a person.", "status": "decided"}
+{"timestamp": "2026-11-13T22:59:09+00:00", "content_id": "c_6589cbf90dfc", "creator_id": "attacker_MF08", "guess": "ai", "model_score": 0.9876, "style_score": 0.8296738770692907, "combined_score": 0.9323258569742519, "label": "Our system's best guess is that this was generated by AI, not written by a person.", "status": "decided"}
+{"timestamp": "2026-11-13T22:59:09+00:00", "content_id": null, "creator_id": "attacker_flood", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
 ```
 
 **The single worst outcome** — the one I'd least want to explain to a writer
 whose work got caught by it:
 
-
+FP03 — a non-native English speaker writing carefully, confidently called AI
+(combined_score 0.7507). This is the one I'd least want to explain: a real
+person doing their best in a second language, penalized by the exact pattern
+documented in real-world AI-detector research — careful, simpler non-native
+phrasing reads to the model like AI output. Telling that writer "our system
+is confident you didn't write this" isn't a coin-flip miss, it's the system
+working exactly as built and still landing on the writer least able to
+push back.
 
 ---
 
