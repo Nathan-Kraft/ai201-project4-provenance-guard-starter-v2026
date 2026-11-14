@@ -20,3 +20,14 @@ and Windows `curl.exe`, with no quoting trouble):
 
 Unit 7 scores are from the exemplar's before-run (`results/run_2026-08-24_1334_before.md`
 in the staff repo), taken at the unit 7 thresholds.
+
+## Criteria test samples (unit 7/8)
+
+Written to cover acceptance criteria 1, 4, and 5 in `criteria.md`. No exemplar
+scores - these are this project's own fixtures, not demo files.
+
+| File | What it is |
+|---|---|
+| clearly_human_02.json - clearly_human_09.json | Confirmed human writing, various registers (errand, workday update, extension request, opinion, debugging notes, meal list, traffic rant, text to a friend) |
+| clearly_ai_02.json - clearly_ai_05.json | Generic AI-style paragraphs (nutrition, climate, remote work, study techniques) |
+| borderline_02.json - borderline_04.json | Borderline/mixed: AI rewritten casual, half-human/half-AI, AI rewritten casual |

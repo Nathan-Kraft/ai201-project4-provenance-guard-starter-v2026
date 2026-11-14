@@ -1,15 +1,12 @@
 """
-What your test runs. ← UNIT 8, MILESTONE 3
+What your test runs. <- UNIT 8, MILESTONE 3
 
 Each of your five criteria needs something run against it. A criterion about
 false positives needs your own writing. One about label coverage needs inputs
-across the score range. One about the appeal path needs a real content_id.
+across the score range.
 
 Working that out is Milestone 3's first step, and this file is where you write
 it down. `run_eval.py` runs everything here three times.
-
-Two are filled in as examples. Replace them with what your criteria actually
-need — these are a shape, not a set.
 
 A scenario carries **either** of these:
 
@@ -20,51 +17,85 @@ A scenario carries **either** of these:
               when the malformed request IS the point — empty text, no `text`
               field at all, something enormous. A bad-input criterion needs it,
               because you cannot express "the field is missing" as a string.
+
+Criterion 3 (the appeal path) isn't here. It needs a submission's content_id
+fed into a second call to /appeal, which this file's two shapes can't express.
+Tested by hand instead, written up as such.
 """
+
+import json
+from pathlib import Path
+
+SAMPLES = Path(__file__).parent / "samples"
+
+
+def _text(filename):
+    return json.loads((SAMPLES / filename).read_text(encoding="utf-8"))["text"]
+
+
+HUMAN_10 = [
+    "clearly_human.json", "clearly_human_02.json", "clearly_human_03.json",
+    "clearly_human_04.json", "clearly_human_05.json", "clearly_human_06.json",
+    "clearly_human_07.json", "clearly_human_08.json", "clearly_human_09.json",
+    "formal_human.json",
+]
 
 SCENARIOS = [
     {
         "name": "my own writing",
         "criterion": 1,
-        # ⚠️ PUT YOUR OWN WRITING HERE. Not AI text, not a sample from the web —
-        # things you actually wrote. This is the criterion that matters most and
-        # it's meaningless with someone else's prose.
-        "texts": [
-            "REPLACE ME with a paragraph you wrote yourself.",
-            "REPLACE ME with another one. Ten pieces is the usual number.",
-        ],
+        # Confirmed human writing, 10 pieces across different registers.
+        # See samples/README.md for what each one is.
+        "texts": [_text(f) for f in HUMAN_10],
+    },
+    {
+        "name": "bad input",
+        "criterion": 2,
+        # Missing text, empty text, whitespace-only text, and text over
+        # 50,000 characters — 5 tries each, since this must be deterministic.
+        "bodies": (
+            [{"creator_id": f"eval_bad_missing_{i}"} for i in range(1, 6)]
+            + [{"text": "", "creator_id": f"eval_bad_empty_{i}"} for i in range(1, 6)]
+            + [{"text": "   ", "creator_id": f"eval_bad_ws_{i}"} for i in range(1, 6)]
+            + [{"text": "word " * 50000, "creator_id": f"eval_bad_huge_{i}"} for i in range(1, 6)]
+        ),
     },
     {
         "name": "label coverage",
-        "criterion": 2,
-        # Inputs spread across your score range, so you can check all three
-        # labels are actually reachable.
+        "criterion": 4,
+        # A mix of 3 clearly-human, 3 clearly-AI, and 4 borderline texts, so
+        # all three `guess` values should show up somewhere in this set.
         "texts": [
-            "REPLACE ME with something you're confident is AI-generated.",
-            "REPLACE ME with something you're confident is human-written.",
-            "REPLACE ME with something genuinely borderline.",
+            _text("clearly_human_02.json"),
+            _text("clearly_human_05.json"),
+            _text("clearly_human_08.json"),
+            _text("clearly_ai_02.json"),
+            _text("clearly_ai_03.json"),
+            _text("clearly_ai_04.json"),
+            _text("borderline.json"),
+            _text("borderline_02.json"),
+            _text("borderline_03.json"),
+            _text("borderline_04.json"),
         ],
     },
-    # A bad-input criterion looks like this. Uncomment and adjust if that's one
-    # of your five — these are raw request bodies, sent exactly as written.
-    #
-    # {
-    #     "name": "bad input",
-    #     "criterion": 3,
-    #     "bodies": [
-    #         {"text": "", "creator_id": "eval_bad_empty"},
-    #         {"creator_id": "eval_bad_missing"},          # no text field at all
-    #         {"text": "word " * 50000, "creator_id": "eval_bad_huge"},
-    #         {"text": None, "creator_id": "eval_bad_null"},
-    #     ],
-    # },
-
-    # TODO: add what your remaining criteria need.
-    #
-    # A criterion about the appeal path can't be tested by sending text alone;
-    # it needs a submission first and then an appeal against the content_id
-    # that came back. You'll need to test that one by hand, or extend this file
-    # and run_eval.py to do it. Saying which you did is part of the write-up.
+    {
+        "name": "correct side",
+        "criterion": 5,
+        # 5 clearly-human, 5 clearly-AI. Ground truth isn't stored here,
+        # checked against samples/README.md when scoring the run.
+        "texts": [
+            _text("clearly_human.json"),
+            _text("clearly_human_03.json"),
+            _text("clearly_human_06.json"),
+            _text("clearly_human_07.json"),
+            _text("clearly_human_09.json"),
+            _text("clearly_ai.json"),
+            _text("clearly_ai_02.json"),
+            _text("clearly_ai_03.json"),
+            _text("clearly_ai_04.json"),
+            _text("clearly_ai_05.json"),
+        ],
+    },
 ]
 
 

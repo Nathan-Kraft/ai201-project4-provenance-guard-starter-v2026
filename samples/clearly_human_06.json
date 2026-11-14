@@ -1,0 +1,4 @@
+{
+  "text": "When I am dealing with a bug in code that I need to fix, I have a few things that I will always check first before really seeking help. 1. I would check for obvious syntax errors, especially if I used = instead of == for comparison. 2. The next thing I will always check is my logic in if statements I will run through the code and see if I wrote something different than what I intended. 3. While doing that I would also be checking the other logic and thinking it through line by line, typically I will also add in test print statements to see if I am reaching these sections of code or not. 4. If that still fails then I would move to taking some test cases and walking through the code with it and seeing where it might be failing.",
+  "creator_id": "demo_instructor"
+}
