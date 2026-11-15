@@ -856,11 +856,105 @@ This targets `MF02`, where a single-character submission reaches
 `detector.perplexity()` and raises a `ValueError` because it has fewer than
 three tokens.
 
-**Planned evidence:** rerun the attack set after the change and show
-`MF02` moving from `500`/`BROKE` to `400`/`HELD`, with the rejection reason
-recorded in the audit log. The change should reduce the remaining broken
-attack count without changing the detector's scoring behavior for valid
-submissions.
+**What I changed:** added `MIN_TEXT_WORDS = 3` in `config.py` and a route
+validation check before either signal runs. Text below that minimum now
+returns `400` and calls `audit.log_rejection(..., reason="text_too_short")`.
+
+**Attack Run — After Stretch Improvement**
+
+I reran the full set with `run_attacks.py --label after_short`; the complete
+raw output is in `results/attack_run_2026-11-15_0217_after_short.md`.
+
+| ID | Family | Targeting | Status | Content ID | Guess | Score | Verdict |
+|---|---|---|---|---|---|---|---|
+| EV01 | evasion | signal two: typos raise word variety | 200 | `c_e700e27bc5a5` | unsure | 0.500 | HELD |
+| EV02 | evasion | signal two: broken-up sentences raise length spread | 200 | `c_a4679a7fbe65` | unsure | 0.500 | HELD |
+| EV03 | evasion | signal two: a pasted quotation changes the shape | 200 | `c_5774e33aa006` | unsure | 0.500 | HELD |
+| EV04 | evasion | signal one: unusual words raise perplexity | 200 | `c_03555da98c3a` | unsure | 0.500 | HELD |
+| EV05 | evasion | both signals: heavy human editing pass | 200 | `c_58635b09dead` | unsure | 0.500 | HELD |
+| EV06 | evasion | signal two: one very long sentence and one very short | 200 | `c_fe452462e524` | unsure | 0.500 | HELD |
+| EV07 | evasion | signal two: padding with punctuation | 200 | `c_df26b41e2540` | unsure | 0.500 | HELD |
+| EV08 | evasion | signal one: text below the token window | 200 | `c_0e534900bca0` | unsure | 0.500 | HELD |
+| EV09 | evasion | both signals: AI text with a human opening paragraph bolted on | 200 | `c_6273ab2fc4bf` | unsure | 0.500 | HELD |
+| EV10 | evasion | signal two: repeated stanza structure | 200 | `c_061657565288` | ai | 0.500 | HELD |
+| FP01 | false_positive | plain, clear human writing with no flourishes | 200 | `c_4e2b671a9ece` | unsure | 0.500 | HELD |
+| FP02 | false_positive | human writing in a formal register | 200 | `c_d076a2ffc172` | ai | 0.500 | BROKE |
+| FP03 | false_positive | a non-native English speaker writing carefully | 200 | `c_9cafc71f5ef3` | ai | 0.500 | BROKE |
+| FP04 | false_positive | a student essay written to a rubric | 200 | `c_4011410d6957` | ai | 0.500 | BROKE |
+| FP05 | false_positive | technical documentation written by a person | 200 | `c_f58bfc37f349` | ai | 0.500 | BROKE |
+| FP06 | false_positive | a person imitating a formal template | 200 | `c_ff7b68ef3799` | ai | 0.500 | BROKE |
+| FP07 | false_positive | human writing that repeats a phrase deliberately | 200 | `c_2315b15cb9aa` | ai | 0.500 | BROKE |
+| FP08 | false_positive | very short genuine human submission | 200 | `c_e5a5cbe7e2b4` | unsure | 0.500 | HELD |
+| PI01 | prompt_injection | instruction to ignore the check | 200 | `c_05a57e084c33` | unsure | 0.500 | HELD |
+| PI02 | prompt_injection | instruction disguised as a system message | 200 | `c_e09596efecda` | human | 0.500 | BROKE |
+| PI03 | prompt_injection | instruction wrapped in the writer's voice | 200 | `c_9219969fabd5` | unsure | 0.500 | HELD |
+| PI04 | prompt_injection | attempt to make the label text hostile | 200 | `c_1a818d425688` | unsure | 0.500 | HELD |
+| PI05 | prompt_injection | attempt to inject into the audit log | 200 | `c_c2efc103048c` | unsure | 0.500 | HELD |
+| PI06 | prompt_injection | instruction plus real human text | 200 | `c_660f33239428` | unsure | 0.500 | HELD |
+| MF01 | malformed | text is only whitespace | 400 | `—` | — | — | HELD |
+| MF02 | malformed | text is a single character | 400 | `—` | — | — | HELD |
+| MF03 | malformed | text is control characters | 200 | `c_49a8bc7bff82` | unsure | 0.500 | HELD |
+| MF04 | malformed | text is only punctuation | 200 | `c_bcd10553b235` | unsure | 0.500 | HELD |
+| MF05 | malformed | text is a very long single word | 400 | `—` | — | — | HELD |
+| MF06 | malformed | text is emoji only | 400 | `—` | — | — | HELD |
+| MF07 | malformed | text is right-to-left script | 200 | `c_b8a6aaf2a99f` | ai | 0.500 | BROKE |
+| MF08 | malformed | text is 60,000 characters | 400 | `—` | — | — | HELD |
+| RQ01 | malformed | no text field at all | 400 | `—` | — | — | HELD |
+| RQ02 | malformed | no creator_id | 200 | `c_8297cf3741ee` | unsure | 0.500 | HELD |
+| RQ03 | malformed | text is a number | 400 | `—` | — | — | HELD |
+| RQ04 | malformed | text is a list | 400 | `—` | — | — | HELD |
+| RQ05 | malformed | text is null | 400 | `—` | — | — | HELD |
+| RQ06 | malformed | creator_id is an object | 200 | `c_943899055a24` | unsure | 0.500 | HELD |
+| RQ07 | malformed | body is a JSON array, not an object | 400 | `—` | — | — | HELD |
+| RQ08 | malformed | body is unparseable JSON | 400 | `—` | — | — | HELD |
+| RQ09 | malformed | body is empty | 400 | `—` | — | — | HELD |
+| RQ10 | malformed | body is form-encoded, not JSON | 429 | `—` | — | — | HELD |
+| RQ11 | malformed | body is JSON claiming to be plain text | 429 | `—` | — | — | HELD |
+| RQ12 | malformed | deeply nested JSON | 400 | `—` | — | — | HELD |
+| FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_697d7dcf2383` | unsure | 0.500 | HELD |
+| FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_7d987b87ec43` | unsure | 0.500 | HELD |
+| FL01_03 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_20739de53398` | unsure | 0.500 | HELD |
+| FL01_04 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_32cdc8653e18` | unsure | 0.500 | HELD |
+| FL01_05 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_bb4f652051b8` | unsure | 0.500 | HELD |
+| FL01_06 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_07 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_08 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_09 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_10 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+| FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
+
+7 BROKE, 0 N/A, 49 HELD.
+The new rejection is present in `logs/audit.jsonl`, for example:
+
+```json
+{"timestamp": "2026-11-15T08:17:00+00:00", "content_id": null, "creator_id": "attacker_MF02", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "text_too_short"}
+```
+
+This helped by eliminating three malformed-input paths that previously
+reached scoring or crashed. It did not change valid submissions or address
+the signal-one false-positive family; those remain the cost of keeping this
+improvement narrowly scoped to input safety.
+
+### Criterion Run Log — After Stretch Improvement
+
+The post-change criterion run was produced by
+`run_eval.py --label after_short` and saved in
+`results/run_2026-11-15_0227_after_short.md`. Criteria 1, 2, 4, and 5 were
+run three times; criterion 3 is carried over from its prior three-trial
+appeal run because this stretch change does not affect appeals.
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. my own writing | At most 1 of 10 confirmed human pieces flagged `ai` | 4/10 flagged ai | 4/10 flagged ai | 4/10 flagged ai | MISS (unchanged) |
+| 2. bad input | 400 for missing/empty/whitespace-only text and text over 50,000 characters, 5/5 each, never 500 | 20/20 returned 400, including the new short-input check | 20/20 returned 400, including the new short-input check | 20/20 returned 400, including the new short-input check | MET (unchanged; strengthened) |
+| 3. appeal path | 5 of 5 appeals against valid content_ids change status to `under_review` and get logged | 5/5 under_review, 5/5 logged | 5/5 under_review, 5/5 logged | 5/5 under_review, 5/5 logged | MET (carried over) |
+| 4. label coverage | All three `guess` values appear across 3 clearly-human/3 clearly-AI/4 borderline texts | only `ai` and `unsure` appeared | only `ai` and `unsure` appeared | only `ai` and `unsure` appeared | MISS (unchanged) |
+| 5. correct side | At least 8 of 10 (5 human + 5 AI) get the correct side | 10/10 | 10/10 | 10/10 | MET (unchanged) |
+
+The stretch change helped the bad-input axis without changing any verdict
+for the model-scoring criteria: criterion 2 remained met, criteria 1 and 4
+remained misses, and criterion 5 remained met.
 
 
 

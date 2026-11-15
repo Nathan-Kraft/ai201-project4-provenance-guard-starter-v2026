@@ -219,6 +219,12 @@ def submit():
         "error": "bad_request",
         "message": f"Text exceeds {config.MAX_TEXT_LENGTH} characters."}), 400
 
+    if len(text.split()) < config.MIN_TEXT_WORDS:
+        audit.log_rejection(creator_id=creator_id, reason="text_too_short")
+        return jsonify({
+        "error": "bad_request",
+        "message": f"Text must contain at least {config.MIN_TEXT_WORDS} words."}), 400
+
     # step 3 - one real signal that we first tested from the terminal. Put the real number in the response, but leave confidence and label as placeholders.
     #python detector.py "some text"
     import detector

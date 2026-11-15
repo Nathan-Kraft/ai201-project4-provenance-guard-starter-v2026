@@ -52,6 +52,9 @@ DETECTOR_MAX_TOKENS = 400
 # were ordinary text.
 MAX_TEXT_LENGTH = 50000
 
+# The detector needs at least three tokens to produce a meaningful score.
+MIN_TEXT_WORDS = 3
+
 
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
 # How much each signal counts toward the combined score.
