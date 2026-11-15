@@ -308,6 +308,28 @@ $ curl.exe "http://127.0.0.1:5000/log?limit=2"
 - *What I changed:* Reordered the route so validation runs first and
   returns 400 immediately, before the detector or audit log ever execute.
 
+**Moment 3**
+
+- *What I asked for:* Pick one improvement from the diagnoses (reweight
+  the signals, move a threshold, or validate the input) and make the case
+  for it before touching any code.
+- *What came back:* A first recommendation to raise `AI_THRESHOLD` from
+  0.65 to 0.75, since that's where the four criterion 1 false positives
+  landed. I pushed back and asked for the diagnosis to be checked more
+  carefully before picking. On a second pass, it pulled the actual
+  combined scores for the false positives (0.68 to 0.77) against genuine
+  clearly-AI samples (0.68 to 0.73) and found the two ranges overlap, so
+  no threshold or reweight could fix the false positives without also
+  making the service unable to confidently call real AI text `ai` at all,
+  trading one miss for another on criterion 4. It proposed input
+  validation instead: a length check and a payload-type guard at the
+  route, which cleanly fixed criterion 2 and two broken attacks with no
+  such trade-off.
+- *What I changed:* Went with the input-validation fix as proposed. I
+  didn't make an independent call here beyond asking it to look harder
+  before I'd accept the first answer; the numbers it found made the case
+  on their own.
+
 ## Stretch Features
 
 ### Stretch: `GET /content/<id>`
@@ -526,6 +548,8 @@ push back.
 
 <!-- Your five criteria across three trials. `run_eval.py --label before`. -->
 
+### Before
+
 | Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
 |---|---|---|---|---|---|
 | 1. my own writing | At most 1 of 10 confirmed human pieces flagged `ai` | 4/10 flagged ai | 4/10 flagged ai | 4/10 flagged ai | MISS |
@@ -707,18 +731,94 @@ Stage: the route.
 
 **What I changed:**
 
+Added a maximum-length check and a payload-type guard to `/submit`'s input validation (app.py, the same block as the existing missing/empty check), plus a new `MAX_TEXT_LENGTH = 50000` constant in config.py. `request.get_json(silent=True)` is now checked with `isinstance(payload, dict)` before anything calls `.get()` on it, the same guard `rate_limit_key` already had, and text longer than `config.MAX_TEXT_LENGTH` now gets rejected with a 400 before either signal runs.
+
 **Which diagnosis pointed at it:**
+
+Three diagnoses above named the same stage: criterion 2 ("the route... no length check exists anywhere"), MF08 ("the route, compounded by signal one... the oversized body should have been rejected and wasn't"), and RQ07 ("the route... `payload.get("text")` raises `AttributeError`... the rate limiter's own `rate_limit_key` function already guards against exactly this case"). All three are the same missing input-validation step, not three separate problems, so one change at the route targeted all three. I deliberately did not touch the signal-one-plus-weighting cause behind criteria 1 and 4, since the false-positive and genuine-AI combined scores overlap in the same 0.68-0.77 range: any reweight or threshold move strong enough to fix the false positives would also stop the service from ever confidently calling real AI text `ai`, trading one miss for another rather than fixing one.
 
 ### Attack Run — After
 
 <!-- Same format. `run_attacks.py --label after` -->
 
+| ID | Family | Targeting | Status | Content ID | Guess | Score | Verdict |
+|---|---|---|---|---|---|---|---|
+| EV01 | evasion | signal two: typos raise word variety | 200 | `c_1c823283fe65` | unsure | 0.500 | HELD |
+| EV02 | evasion | signal two: broken-up sentences raise length spread | 200 | `c_9ef2cc73fb26` | unsure | 0.500 | HELD |
+| EV03 | evasion | signal two: a pasted quotation changes the shape | 200 | `c_7dfd6e4427e4` | unsure | 0.500 | HELD |
+| EV04 | evasion | signal one: unusual words raise perplexity | 200 | `c_8f82d5127d85` | unsure | 0.500 | HELD |
+| EV05 | evasion | both signals: heavy human editing pass | 200 | `c_cab06e94b80f` | unsure | 0.500 | HELD |
+| EV06 | evasion | signal two: one very long sentence and one very short | 200 | `c_3d0881fcc6a2` | unsure | 0.500 | HELD |
+| EV07 | evasion | signal two: padding with punctuation | 200 | `c_733eecc65625` | unsure | 0.500 | HELD |
+| EV08 | evasion | signal one: text below the token window | 200 | `c_895a0bd63a35` | unsure | 0.500 | HELD |
+| EV09 | evasion | both: AI text with a human opening paragraph bolted on | 200 | `c_522b97f89029` | unsure | 0.500 | HELD |
+| EV10 | evasion | signal two: repeated stanza structure | 200 | `c_32a93c38a573` | ai | 0.500 | HELD |
+| FP01 | false_positive | plain, clear human writing with no flourishes | 200 | `c_b4ec84e4fd7f` | unsure | 0.500 | HELD |
+| FP02 | false_positive | human writing in a formal register | 200 | `c_38105e1d792e` | ai | 0.500 | BROKE |
+| FP03 | false_positive | a non-native English speaker writing carefully | 200 | `c_cf6a9d22eb9e` | ai | 0.500 | BROKE |
+| FP04 | false_positive | a student essay written to a rubric | 200 | `c_688e02da271c` | ai | 0.500 | BROKE |
+| FP05 | false_positive | technical documentation written by a person | 200 | `c_32c628065aea` | ai | 0.500 | BROKE |
+| FP06 | false_positive | a person imitating a formal template | 200 | `c_70707911d070` | ai | 0.500 | BROKE |
+| FP07 | false_positive | human writing that repeats a phrase deliberately | 200 | `c_c122236b4985` | ai | 0.500 | BROKE |
+| FP08 | false_positive | very short genuine human submission | 200 | `c_5aa3155e5e36` | unsure | 0.500 | HELD |
+| PI01 | prompt_injection | instruction to ignore the check | 200 | `c_392aa5cb7875` | unsure | 0.500 | HELD |
+| PI02 | prompt_injection | instruction disguised as a system message | 200 | `c_12dcd93fa011` | human | 0.500 | BROKE |
+| PI03 | prompt_injection | instruction wrapped in the writer's voice | 200 | `c_a0ffc23a1349` | unsure | 0.500 | HELD |
+| PI04 | prompt_injection | attempt to make the label text hostile | 200 | `c_c705a2944378` | unsure | 0.500 | HELD |
+| PI05 | prompt_injection | attempt to inject into the audit log | 200 | `c_949e907913a8` | unsure | 0.500 | HELD |
+| PI06 | prompt_injection | instruction plus real human text | 200 | `c_52aabd5cf5d3` | unsure | 0.500 | HELD |
+| MF01 | malformed | text is only whitespace | 400 | `-` | - | - | HELD |
+| MF02 | malformed | text is a single character | 500 | `-` | - | - | BROKE |
+| MF03 | malformed | text is control characters | 200 | `c_9ebe559fbb9a` | unsure | 0.500 | HELD |
+| MF04 | malformed | text is only punctuation | 200 | `c_bcd2830f768d` | unsure | 0.500 | HELD |
+| MF05 | malformed | text is a very long single word | 200 | `c_f28e850d3c56` | ai | 0.500 | HELD |
+| MF06 | malformed | text is emoji only | 200 | `c_475e5a7007ea` | ai | 0.500 | HELD |
+| MF07 | malformed | text is right-to-left script | 200 | `c_ea8105c87b74` | ai | 0.500 | BROKE |
+| MF08 | malformed | text is 60,000 characters | 400 | `-` | - | - | HELD |
+| RQ01 | malformed | no text field at all | 400 | `-` | - | - | HELD |
+| RQ02 | malformed | no creator_id | 200 | `c_844a0530db28` | unsure | 0.500 | HELD |
+| RQ03 | malformed | text is a number | 400 | `-` | - | - | HELD |
+| RQ04 | malformed | text is a list | 400 | `-` | - | - | HELD |
+| RQ05 | malformed | text is null | 400 | `-` | - | - | HELD |
+| RQ06 | malformed | creator_id is an object | 200 | `c_96e845b0ec7c` | unsure | 0.500 | HELD |
+| RQ07 | malformed | body is a JSON array, not an object | 400 | `-` | - | - | HELD |
+| RQ08 | malformed | body is unparseable JSON | 400 | `-` | - | - | HELD |
+| RQ09 | malformed | body is empty | 400 | `-` | - | - | HELD |
+| RQ10 | malformed | body is form-encoded, not JSON | 429 | `-` | - | - | N/A |
+| RQ11 | malformed | body is JSON claiming to be plain text | 429 | `-` | - | - | N/A |
+| RQ12 | malformed | deeply nested JSON | 400 | `-` | - | - | HELD |
+| FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_a23b0cf5b68c` | unsure | 0.500 | HELD |
+| FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_0933baf1bdee` | unsure | 0.500 | HELD |
+| FL01_03 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_aca9e689dc77` | unsure | 0.500 | HELD |
+| FL01_04 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_14ff069f0f4c` | unsure | 0.500 | HELD |
+| FL01_05 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_466e3318d005` | unsure | 0.500 | HELD |
+| FL01_06 | flood_same_creator | 20 rapid submissions from one creator | 429 | `-` | - | - | HELD |
+| FL01_07 | flood_same_creator | 20 rapid submissions from one creator | 429 | `-` | - | - | HELD |
+| FL01_08 | flood_same_creator | 20 rapid submissions from one creator | 429 | `-` | - | - | HELD |
+| FL01_09 | flood_same_creator | 20 rapid submissions from one creator | 429 | `-` | - | - | HELD |
+| FL01_10 | flood_same_creator | 20 rapid submissions from one creator | 429 | `-` | - | - | HELD |
+| FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | `-` | - | - | HELD |
+| FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | `-` | - | - | HELD |
 
+9 BROKE, 2 N/A (blocked by the rate limiter before the route ran), 45 HELD.
+
+### Run Log and Verdicts — After
+
+<!-- Same five criteria, same three trials, run after the input-validation change. `run_eval.py --label after`, from `results/run_2026-11-15_0052_after.md`. -->
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. my own writing | At most 1 of 10 confirmed human pieces flagged `ai` | 4/10 flagged ai | 4/10 flagged ai | 4/10 flagged ai | MISS (unchanged) |
+| 2. bad input | 400 for missing/empty/whitespace-only text and text over 50,000 characters, 5/5 each, never 500 | missing 5/5, empty 5/5, whitespace 5/5, huge text 5/5, all 400 | same | same | MET (fixed) |
+| 3. appeal path | 5 of 5 appeals against valid content_ids change status to `under_review` and get logged | not re-run, unaffected by this change | - | - | MET (carried over) |
+| 4. label coverage | All three `guess` values appear across 3 clearly-human/3 clearly-AI/4 borderline texts | only `ai` and `unsure` appeared, never `human` | same | same | MISS (unchanged) |
+| 5. correct side | At least 8 of 10 (5 human + 5 AI) get the correct side | 10/10 | 10/10 | 10/10 | MET (unchanged) |
+
+Only criterion 2 moved. The input-validation fix targeted the route, which is what criterion 2 tests, and nothing else touches the route, so nothing else was expected to move, and nothing else did.
 
 **Did it help, and how do I know:**
 
-<!-- Widening the unsure band usually fixes one problem and creates another.
-     Reporting that trade honestly is worth full credit. -->
+Yes, on the axis this change targeted, and no further. BROKE count dropped from 11 to 9: RQ07 (500 to 400) and MF08 (confident `ai` on 60,000 characters, now a 400, rejected before either signal ran) both moved to HELD. The eval's criterion 2 went from MISS to MET: all three bad-input cases (missing, empty, now oversized) returned 400 across all 20 tries in all 3 trials. Nothing else moved: criterion 1 stayed at 4/10 false positives, criterion 4 still never produces `human`, criterion 5 stayed at 10/10, because none of that is downstream of input validation. MF02 (single character, still a 500) is the one attack this change was never meant to cover, left as a named gap.
 
 
 
@@ -729,12 +829,19 @@ Stage: the route.
 <!-- For each attack still getting through and each criterion still missed:
      what you'd do, and why you stopped. -->
 
+**Criterion 1 (4/10 confirmed-human pieces flagged `ai`), criterion 4 (`human` never appears), and FP02-FP07 (6 attacks): all one cause.** Signal one's blind spot (plain, common-word writing reads as predictable, hence AI-ish) amplified by the combining rule's 0.65 weight on `model_score`, diagnosed above. What I'd do: design a combining rule that can actually separate the two populations, not just slide the same threshold back and forth. I checked the actual numbers before picking this unit's one change, and found the false-positive combined scores (0.68-0.77) and genuine clearly-AI combined scores (0.68-0.73) overlap in the same band. No single reweight or threshold move I tried fixes the false positives without also making the service unable to confidently call real AI text `ai` at all, which would trade this miss for a new one on criterion 4's reachability test. Why I stopped: that needs a smarter rule (per-length calibration, a third signal, or a non-linear combination) than I had time to design and test this round, so I picked the one change that was a clean win instead (input validation) and left this one named rather than rushed.
 
+**PI02 (instruction disguised as a system message): same family, opposite direction.** The diagnosis already shows this attack doesn't work by the service obeying injected text; it works because the injected text's unnatural phrasing is exactly what gpt2 finds surprising, so `model_score` reads low. Why I stopped: fixing this specific case by hand (detecting "system message"-shaped text) would be overfitting to one attack's wording rather than a real fix, and the real fix is the same signal-one combining-rule problem as above.
+
+**MF02 (single character, 500).** `detector.perplexity` raises below 3 tokens; nothing in `/submit` catches it or checks a minimum length. I named this one explicitly as a known gap earlier this unit and chose not to bundle it into this round's input-validation change, since it's a different cause (a minimum, not a maximum) with no criterion target to size it against. What I'd do: either catch the `ValueError` in the route and return 400, or add a minimum-length check next to the new `MAX_TEXT_LENGTH` one. Why I stopped: time; this unit's one change was scoped to what criterion 2 and the overlapping diagnoses (RQ07, MF08) already named.
+
+**MF07 (right-to-left script, style_score 1.0).** `stylometry.words()` only matches `[a-z0-9']+`, so RTL text produces zero matched words, all three style sub-measures hit their empty-input fallback at once, and `style_signal` reads that as maximally AI-ish instead of "unmeasurable." What I'd do: make `words()` Unicode-aware (for example `\w+` with the `re.UNICODE` flag, or a real tokenizer), and separately reconsider whether "can't measure" should default to the AI extreme at all, since it isn't evidence of anything. Why I stopped: this is a real signal-two bug I found while diagnosing, but fixing it wasn't the one change I picked this round, and I didn't want to make two unrelated changes and lose the ability to say cleanly which one caused which result.
+
+**Criterion 5's loophole, named but not resolved.** A detector that always answered `unsure` would pass this criterion 10/10 without ever committing to a side, since `unsure` counts as correct for either. Criterion 5 was measured cleanly (10/10, three trials), so this doesn't qualify for a formal revision under criteria.md's own rule: revisions are for a criterion that couldn't be measured, not one that passed too easily. Flagging it here as a known weakness in how the criterion is written, left for whoever picks this project up next.
 
 **The trade I'd make if this ran for real:**
 
-<!-- Two sentences. Fewer wrong accusations means more AI text getting through.
-     Say which way you'd go and WHO PAYS FOR IT. -->
+I'd keep weighting toward fewer false accusations, the same direction criterion 1 already picked, even knowing it lets more real AI text through unflagged. The people who pay for that are whoever relies on the `ai` label meaning something, an instructor, an editor, a reader, not the wrongly-accused writer, and that's a cost I'd rather hand to the reader of a report than to the person whose name is on it.
 
 
 

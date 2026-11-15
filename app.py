@@ -200,8 +200,10 @@ def submit():
     a malformed input is one of the most common real failures there is.
     """
 
-    payload = request.get_json(silent=True) or {}
-    text= payload.get("text")
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        payload = {}
+    text = payload.get("text")
     creator_id = payload.get("creator_id","unknown")
 
     #step 2 - JSON goes in: pull text and creater_id out of the body. If text is missing or empty, return a 400 with a JSON error message.
@@ -210,7 +212,13 @@ def submit():
         return jsonify({
         "error": "bad_request",
         "message": "Send JSON with a non-empty \"text\"."}), 400
-    
+
+    if len(text) > config.MAX_TEXT_LENGTH:
+        audit.log_rejection(creator_id=creator_id, reason="text_too_long")
+        return jsonify({
+        "error": "bad_request",
+        "message": f"Text exceeds {config.MAX_TEXT_LENGTH} characters."}), 400
+
     # step 3 - one real signal that we first tested from the terminal. Put the real number in the response, but leave confidence and label as placeholders.
     #python detector.py "some text"
     import detector

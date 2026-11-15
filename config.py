@@ -46,6 +46,12 @@ DETECTOR_MODEL = os.getenv("AI201_DETECTOR_MODEL", "gpt2")
 # 300 words, which is enough for the signal to mean something.
 DETECTOR_MAX_TOKENS = 400
 
+# The longest text /submit will accept, in characters. Unit 8's own
+# criterion 2 names this number; past it, the route rejects before either
+# signal runs instead of scoring a 60,000-character submission as if it
+# were ordinary text.
+MAX_TEXT_LENGTH = 50000
+
 
 # ─── Scoring (Milestone 4) ───────────────────────────────────────────────────
 # How much each signal counts toward the combined score.
