@@ -495,8 +495,8 @@ rejected entries with all nine fields present as null.
 | RQ07 | malformed | body is a JSON array, not an object | 500 | `—` | — | — | BROKE |
 | RQ08 | malformed | body is unparseable JSON | 400 | `—` | — | — | HELD |
 | RQ09 | malformed | body is empty | 400 | `—` | — | — | HELD |
-| RQ10 | malformed | body is form-encoded, not JSON | 429 | `—` | — | — | N/A — blocked by the rate limiter before the route ran |
-| RQ11 | malformed | body is JSON claiming to be plain text | 429 | `—` | — | — | N/A — blocked by the rate limiter before the route ran |
+| RQ10 | malformed | body is form-encoded, not JSON | 429 | `—` | — | — | HELD — blocked by the rate limiter before the route ran |
+| RQ11 | malformed | body is JSON claiming to be plain text | 429 | `—` | — | — | HELD — blocked by the rate limiter before the route ran |
 | RQ12 | malformed | deeply nested JSON | 400 | `—` | — | — | HELD |
 | FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_6cc66865b58d` | unsure | 0.500 | HELD |
 | FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_4b7f541eccff` | unsure | 0.500 | HELD |
@@ -511,7 +511,7 @@ rejected entries with all nine fields present as null.
 | FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
 | FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | `—` | — | — | HELD |
 
-11 BROKE, 2 N/A (blocked by the rate limiter before the route ran), 43 HELD.
+11 BROKE, 0 N/A, 45 HELD.
 
 **Ten audit log entries from the run**
 
@@ -784,8 +784,8 @@ Three diagnoses above named the same stage: criterion 2 ("the route... no length
 | RQ07 | malformed | body is a JSON array, not an object | 400 | `-` | - | - | HELD |
 | RQ08 | malformed | body is unparseable JSON | 400 | `-` | - | - | HELD |
 | RQ09 | malformed | body is empty | 400 | `-` | - | - | HELD |
-| RQ10 | malformed | body is form-encoded, not JSON | 429 | `-` | - | - | N/A |
-| RQ11 | malformed | body is JSON claiming to be plain text | 429 | `-` | - | - | N/A |
+| RQ10 | malformed | body is form-encoded, not JSON | 429 | `-` | - | - | HELD |
+| RQ11 | malformed | body is JSON claiming to be plain text | 429 | `-` | - | - | HELD |
 | RQ12 | malformed | deeply nested JSON | 400 | `-` | - | - | HELD |
 | FL01_01 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_a23b0cf5b68c` | unsure | 0.500 | HELD |
 | FL01_02 | flood_same_creator | 20 rapid submissions from one creator | 200 | `c_0933baf1bdee` | unsure | 0.500 | HELD |
@@ -800,7 +800,7 @@ Three diagnoses above named the same stage: criterion 2 ("the route... no length
 | FL01_11 | flood_same_creator | 20 rapid submissions from one creator | 429 | `-` | - | - | HELD |
 | FL01_12 | flood_same_creator | 20 rapid submissions from one creator | 429 | `-` | - | - | HELD |
 
-9 BROKE, 2 N/A (blocked by the rate limiter before the route ran), 45 HELD.
+9 BROKE, 0 N/A, 47 HELD.
 
 ### Run Log and Verdicts — After
 
@@ -833,7 +833,11 @@ Yes, on the axis this change targeted, and no further. BROKE count dropped from 
 
 **PI02 (instruction disguised as a system message): same family, opposite direction.** The diagnosis already shows this attack doesn't work by the service obeying injected text; it works because the injected text's unnatural phrasing is exactly what gpt2 finds surprising, so `model_score` reads low. Why I stopped: fixing this specific case by hand (detecting "system message"-shaped text) would be overfitting to one attack's wording rather than a real fix, and the real fix is the same signal-one combining-rule problem as above.
 
-**MF02 (single character, 500).** `detector.perplexity` raises below 3 tokens; nothing in `/submit` catches it or checks a minimum length. I named this one explicitly as a known gap earlier this unit and chose not to bundle it into this round's input-validation change, since it's a different cause (a minimum, not a maximum) with no criterion target to size it against. What I'd do: either catch the `ValueError` in the route and return 400, or add a minimum-length check next to the new `MAX_TEXT_LENGTH` one. Why I stopped: time; this unit's one change was scoped to what criterion 2 and the overlapping diagnoses (RQ07, MF08) already named.
+**MF02 (single character, 500) — resolved by the stretch improvement.**
+The new minimum-content check rejects the request with `400` and records
+`text_too_short` before `detector.perplexity()` can raise its fewer-than-three
+tokens `ValueError`. The same check also holds MF05 and MF06, while the
+remaining broken attacks below are unchanged.
 
 **MF07 (right-to-left script, style_score 1.0).** `stylometry.words()` only matches `[a-z0-9']+`, so RTL text produces zero matched words, all three style sub-measures hit their empty-input fallback at once, and `style_signal` reads that as maximally AI-ish instead of "unmeasurable." What I'd do: make `words()` Unicode-aware (for example `\w+` with the `re.UNICODE` flag, or a real tokenizer), and separately reconsider whether "can't measure" should default to the AI extreme at all, since it isn't evidence of anything. Why I stopped: this is a real signal-two bug I found while diagnosing, but fixing it wasn't the one change I picked this round, and I didn't want to make two unrelated changes and lose the ability to say cleanly which one caused which result.
 
@@ -842,6 +846,21 @@ Yes, on the axis this change targeted, and no further. BROKE count dropped from 
 **The trade I'd make if this ran for real:**
 
 I'd keep weighting toward fewer false accusations, the same direction criterion 1 already picked, even knowing it lets more real AI text through unflagged. The people who pay for that are whoever relies on the `ai` label meaning something, an instructor, an editor, a reader, not the wrongly-accused writer, and that's a cost I'd rather hand to the reader of a report than to the person whose name is on it.
+
+### Stretch: Reject too-short submissions
+
+**Declared before building:** add a minimum-content validation check to
+`POST /submit` so text that cannot produce a detector score is rejected
+with a JSON `400` response and an audit-log rejection instead of crashing.
+This targets `MF02`, where a single-character submission reaches
+`detector.perplexity()` and raises a `ValueError` because it has fewer than
+three tokens.
+
+**Planned evidence:** rerun the attack set after the change and show
+`MF02` moving from `500`/`BROKE` to `400`/`HELD`, with the rejection reason
+recorded in the audit log. The change should reduce the remaining broken
+attack count without changing the detector's scoring behavior for valid
+submissions.
 
 
 
