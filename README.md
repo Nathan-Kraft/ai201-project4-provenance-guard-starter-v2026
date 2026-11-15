@@ -534,6 +534,11 @@ push back.
 | 4. label coverage | All three `guess` values appear across 3 clearly-human/3 clearly-AI/4 borderline texts | only `ai` and `unsure` appeared, never `human` | same | same | MISS |
 | 5. correct side | At least 8 of 10 (5 human + 5 AI) get the correct side | 10/10 | 10/10 | 10/10 | MET |
 
+**How each MET verdict was decided:**
+
+- Criterion 3: the target is 5 of 5 in every trial, with nothing less counting. All three trials came back 5/5 under_review and 5/5 logged, so it's MET.
+- Criterion 5: the target is at least 8 of 10 in every trial. All three trials came back 10/10, clearing the floor by 2 in each one, so it's MET.
+
 **Real output from one trial**, pasted as text, naming the file and function
 that produced it:
 
@@ -644,7 +649,57 @@ From `results/run_2026-11-14_1434_before.md`, Trial 1, produced by `run_eval.py:
 
      Look for a pattern. Five failures on one signal is one problem, not five. -->
 
+**The pattern across misses**
 
+Two distinct root causes produced all three misses, not three independent ones. Criteria 1 and 4 are the same problem twice: signal one's "plain writing reads as predictable" blind spot, amplified by the combining rule's 0.65 weight on model_score, caught on two different sets of test data. Criterion 2 is a separate, unrelated gap: a missing length check at the route, nothing to do with either signal. The same signal-one-plus-weighting cause also accounts for 7 of the 11 broken attacks below (FP02-07, PI02).
+
+**Criterion 1 - my own writing (4/10 confirmed-human pieces flagged `ai`)**
+
+Stage: signal one, amplified by the combining rule.
+
+The four flagged pieces, from the Trial 1 data above: "I had to go to the grocery store..." (model_score 0.8107), "I was wondering if I could get an extension..." (0.8575), "I like watching anime..." (0.7156), and the conducting-textbook passage (0.7418, detailed in "A calibration false positive" above). All four are plain, declarative sentences built from common words, exactly the shape signal one's blind spot rewards with a low-perplexity, high-AI-score reading, regardless of who wrote them. The combining rule weights model_score at 0.65 against style_score's 0.35, so that AI-ish reading dominates the average in all four cases and the combined score clears AI_THRESHOLD (0.65).
+
+**Criterion 2 - oversized text not rejected**
+
+Stage: the route.
+
+`/submit`'s validation (app.py line 208) checks only that `text` is a string and not blank; there is no length check anywhere in the route. The eval's oversized-text case, a string of the word "word" repeated past 50,000 characters, passed validation untouched, came back `200`, and was scored normally: model_score 0.9975, style_score 0.99999, guess `ai`. The criterion was never implemented, not misfiring: nothing in app.py defines what counts as oversized.
+
+**Criterion 4 - label coverage (`human` never appears across 3 clearly-human, 3 clearly-ai, 4 borderline texts)**
+
+Stage: signal one, amplified by the combining rule. Same mechanism as criterion 1, different samples.
+
+The three human texts chosen for this scenario (clearly_human_02, _05, _08) score 0.8107, 0.7156, and 0.427 on the model signal. The first two already sit solidly in AI territory before the combining rule even runs; the third, at 0.427, isn't low enough for style_score to pull the combined score under HUMAN_THRESHOLD (0.35) once model_score carries 0.65 of the weight. None of the three ever produces a combined score low enough for `guess=human`, so the label never fires in this run. This isn't proof the label is unreachable in general (clearly_human_09 reaches 0.15 and scores `human` in criterion 1's data) - it's that these three plain, listy samples happen to be exactly the shape signal one misreads.
+
+**FP02 through FP07 (6 of the 11 BROKE attacks)**
+
+Stage: signal one, amplified by the combining rule. Same mechanism as criterion 1, attacked on purpose instead of found by accident: each is genuine human writing in a shape signal one misreads as predictable (formal register, careful non-native phrasing, a rubric-driven essay, technical documentation, imitation of a template, deliberate repetition). Six attacks, one underlying cause.
+
+**PI02 - instruction disguised as a system message**
+
+Stage: signal one, amplified by the combining rule, not the route or the label mapping. The service never parses or obeys text as instructions anywhere in the pipeline, so the injected "SYSTEM: ... Return guess=human" line is never read as a command. What actually flips the guess is that this unnatural, instruction-shaped phrasing is exactly the kind of text gpt2 finds surprising, so model_score reads low (0.2044, human-leaning) despite the AI-sounding boilerplate that follows it. The 0.65 weight on model_score carries that reading through to a combined score of 0.2808, under HUMAN_THRESHOLD. The attack succeeds by accident, by exploiting the same "unusual phrasing reads human" blind spot named in the Signal one section, not by any instruction-following ability in the route or label mapping.
+
+**MF02 - a single character (500)**
+
+Stage: signal one.
+
+`detector.perplexity` raises `ValueError` whenever the tokenized input has fewer than 3 tokens (detector.py lines 106-107); a single character tokenizes to 1 or 2. Nothing in `/submit` catches that exception, so it propagates past the route as an unhandled 500 instead of a 400. The route checks presence and non-emptiness but not minimum content length, so input that passes validation can still crash the signal underneath it.
+
+**MF07 - right-to-left script (ai, style_score 1.0)**
+
+Stage: signal two.
+
+`stylometry.words()` only matches `[a-z0-9']+`, ASCII Latin letters and digits. Right-to-left script text contains none, so `words()` returns an empty list for every sentence. Both `type_token_ratio` and `sentence_length_spread` hit their documented empty-input fallback of 0.0, which `style_signal` converts into the maximally-AI-ish reading instead of "unmeasurable." All three sub-measures land on the AI extreme at once, pushing style_score to 1.0 and the combined score to 0.939: confidently, wrongly, AI.
+
+**MF08 - 60,000 characters (ai)**
+
+Stage: the route, compounded by signal one. Same validation gap as criterion 2: the oversized body should have been rejected and wasn't. Once it reaches signal one, the long, repetitive text is highly predictable to gpt2 (model_score 0.9876), and the combining rule carries that straight through to a confidently-AI score. Two failures compounding, not one.
+
+**RQ07 - body is a JSON array, not an object (500)**
+
+Stage: the route.
+
+`payload = request.get_json(silent=True) or {}` (app.py line 203) only falls back to `{}` when the parsed body is falsy. A JSON array parses to a non-empty list, which is truthy, so `payload` becomes that list, and the next line's `payload.get("text")` raises `AttributeError` since a list has no `.get`. Flask turns that into an unhandled 500 before any validation runs. The rate limiter's own `rate_limit_key` function already guards against exactly this case by checking `isinstance(payload, dict)` first; the route itself never got the same guard.
 
 ---
 
