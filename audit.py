@@ -161,3 +161,97 @@ def clear() -> int:
 def entries_for(content_id: str) -> list[dict]:
     """Every entry touching one content id, in order."""
     return [e for e in read_entries() if e.get("content_id") == content_id]
+
+
+def latest_decision(entries: list[dict]) -> dict | None:
+    """
+    Pick the entry that currently holds this content's guess/label/scores.
+
+    `entries_for` returns everything touching a content_id in order: the
+    original decision, then any appeal, then any review. Appeals and
+    rejections don't carry real guess/label/score values (an appeal entry
+    only has `reasoning`, a rejection entry zeroes everything out), so this
+    skips those event types and returns the last entry that does carry
+    them. A `review` entry counts as a decision here: by the time
+    `log_review` writes one, it has already been given a complete
+    guess/label pair (unchanged for an upheld appeal, corrected for an
+    overturned one), so it's exactly as valid a "current decision" as the
+    original one from `/submit`.
+
+    Returns None only if `entries` is empty or contains nothing but
+    appeal/rejected events, which shouldn't happen for a real content_id
+    (every content_id starts with a `log_decision` call).
+    """
+    decisions = [e for e in entries if e.get("event") not in ("appeal", "rejected")]
+    return decisions[-1] if decisions else None
+
+
+def current_status(content_id: str) -> dict | None:
+    """
+    Where one piece of content stands right now, derived from the log.
+
+    There's no separate "state" anywhere — the log is append-only, so
+    "current" always means "work it out from the entries so far." `status`
+    comes from the very last entry for this id, whatever kind it is,
+    because status is the one field every event type sets correctly
+    (`decided`, `under_review`, `resolved`, `rejected`). The guess/label/
+    scores instead come from `latest_decision`, since an appeal entry
+    itself carries no such values — it only records that one was
+    challenged, not a new one.
+
+    Returns None if content_id has no entries at all, which both
+    `GET /content/<id>` and `GET /queue` treat as "nothing by that id was
+    ever submitted."
+    """
+    entries = entries_for(content_id)
+    if not entries:
+        return None
+    decision = latest_decision(entries)
+    return {
+        "content_id": content_id,
+        "status": entries[-1].get("status"),
+        "guess": decision.get("guess") if decision else None,
+        "label": decision.get("label") if decision else None,
+        "model_score": decision.get("model_score") if decision else None,
+        "style_score": decision.get("style_score") if decision else None,
+        "combined_score": decision.get("combined_score") if decision else None,
+        "creator_id": decision.get("creator_id") if decision else entries[0].get("creator_id"),
+    }
+
+
+def log_review(content_id: str, reviewer_id: str, decision: str,
+                guess: str | None, label: str | None, notes: str = "") -> dict:
+    """
+    Record a human reviewer's resolution of an appeal.
+
+    Like `log_appeal`, this only appends — the original decision entry (and
+    the appeal entry) are never touched, so the full history of what the
+    detector first said, that it was challenged, and what a person decided
+    about it stays intact and in order.
+
+    `decision` is "uphold" or "overturn" (the route validates this before
+    calling in — this function just records whatever it's given). The
+    caller is also responsible for working out `guess`/`label`: for an
+    upheld appeal they're the content's existing values carried forward
+    unchanged; for an overturned one they're the reviewer's correction. That
+    choice happens in `app.py` rather than here because it depends on
+    `scoring.label_for_guess`, which this module has no reason to know
+    about.
+
+    Sets status "resolved", which is what takes an item out of
+    `GET /queue` — `current_status` will report this entry's guess/label
+    as the content's current ones from this point on.
+    """
+    return _append({
+        "timestamp": _now(),
+        "content_id": content_id,
+        "creator_id": None,
+        "reviewer_id": reviewer_id,
+        "guess": guess,
+        "label": label,
+        "event": "review",
+        "status": "resolved",
+        "decision": decision,
+        "notes": notes,
+    })
+
