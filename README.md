@@ -994,3 +994,50 @@ remained misses, and criterion 5 remained met.
 ---
 
 📖 **How to run this project: [RUNNING.md](RUNNING.md)**
+
+
+## CAPSTONE
+
+**The Shape**
+
+I'm going with shape B, local with logs. I'm building a human review queue on top of the `/appeal` endpoint that already exists: a `GET /queue` so a reviewer can see what's waiting, and a `POST /resolve/<content_id>` so they can uphold or overturn the original call. It all lives in the same append-only audit log `/appeal` already writes to, nothing new to stand up. `RUNNING.md` has the one command that starts the service, checked against a clean checkout, plus what you need to have installed first: Python version, pinned dependencies, and the gpt2 model files, including their size. I'm also pasting in a real run of the service, logs and all, as proof it actually works and not just that the code reads fine.
+
+**Out of scope**
+
+I'm not measuring how long an appeal takes yet. That needs a timestamp on the resolution to measure against, and this round is what creates that timestamp, so it's the next thing to build, not this one.
+
+I'm not touching either detection signal or how they're combined. This feature only reads and appends to the log; it doesn't rescore anything.
+
+I'm not giving the queue a UI. `/queue` and `/resolve/<content_id>` are just routes, tested with curl like everything else here.
+
+
+**How I Used AI**
+
+**Moment 1**
+
+**Moment 2**
+
+
+**The Improvement**
+
+**What I changed:**
+
+**Which diagnosis pointed at it:**
+
+**Attack Run — After**
+
+
+
+**Run Log and Verdicts — After**
+
+
+
+**Did it help, and how do I know:**
+
+
+
+**What's Still Broken**
+
+
+
+**Run Log and Verdicts**
