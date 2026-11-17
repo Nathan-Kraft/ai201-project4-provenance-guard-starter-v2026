@@ -334,25 +334,151 @@ def get_content(content_id):
     if it's been appealed, decided otherwise). Does not re-run either
     signal.
     """
-    entries = audit.entries_for(content_id)
+    current = audit.current_status(content_id)
 
-    if not entries:
+    if current is None:
         return jsonify({
             "error": "not_found",
             "message": f"No submission found with content_id {content_id!r}."
         }), 404
 
-    decision_entries = [e for e in entries if e.get("event") != "appeal"]
-    decision = decision_entries[-1]
+    return jsonify(current), 200
+
+
+@app.get("/queue")
+def get_queue():
+    """
+    Appeals waiting for human review, oldest first. ← Capstone
+
+    Walks the log once to find every distinct content_id, keeps the ones
+    whose current status is "under_review", and reports each one's latest
+    appeal (when it was queued, and the writer's reasoning). Always 200,
+    even when the queue is empty, matching /log's style.
+    """
+    entries = audit.read_entries()
+
+    seen_ids = []
+    for e in entries:
+        content_id = e.get("content_id")
+        if content_id and content_id not in seen_ids:
+            seen_ids.append(content_id)
+
+    queue = []
+    for content_id in seen_ids:
+        current = audit.current_status(content_id)
+        if current is None or current["status"] != "under_review":
+            continue
+
+        appeals = [
+            e for e in entries
+            if e.get("content_id") == content_id and e.get("event") == "appeal"
+        ]
+        latest_appeal = appeals[-1]
+
+        queue.append({
+            "content_id": content_id,
+            "queued_since": latest_appeal.get("timestamp"),
+            "reasoning": latest_appeal.get("reasoning"),
+        })
+
+    queue.sort(key=lambda item: item["queued_since"])
+
+    return jsonify({"count": len(queue), "queue": queue}), 200
+
+
+@app.post("/resolve/<content_id>")
+def resolve(content_id):
+    """
+    A human reviewer closes out an appeal. ← Capstone
+
+    Expects JSON:
+        {"decision": "uphold"|"overturn", "notes": "...", "reviewer_id": "..."}
+    `overturn` also requires "corrected_guess" (one of "ai"/"human"/"unsure").
+
+    Validation order mirrors /appeal's: existence first, then shape, then
+    business state. Every rejection path logs via audit.log_rejection first,
+    same as /submit and /appeal, so a bad request still leaves a trace.
+    """
+    payload = request.get_json(silent=True) or {}
+    decision = payload.get("decision")
+    notes = payload.get("notes", "")
+    reviewer_id = payload.get("reviewer_id", "unknown")
+    corrected_guess = payload.get("corrected_guess")
+
+    # existence check first - a typo'd content_id should 404, not fall through
+    # and look like some other kind of rejection.
+    current = audit.current_status(content_id)
+
+    if current is None:
+        audit.log_rejection(creator_id=reviewer_id, reason="unknown_content_id", content_id=content_id)
+        return jsonify({
+            "error": "not_found",
+            "message": f"No submission found with content_id {content_id!r}."
+        }), 404
+
+    # shape check - decision has to be one of the two values this route
+    # knows how to handle before anything else is looked at.
+    if decision not in ("uphold", "overturn"):
+        audit.log_rejection(creator_id=reviewer_id, reason="invalid_decision", content_id=content_id)
+        return jsonify({
+            "error": "bad_request",
+            "message": 'Send JSON with "decision" set to "uphold" or "overturn".',
+        }), 400
+
+    # business-state checks - this content_id has to actually be sitting in
+    # the queue right now. Already resolved and never-appealed are both
+    # treated as conflicts, just with different reasons for the log.
+    if current["status"] == "resolved":
+        audit.log_rejection(creator_id=reviewer_id, reason="already_resolved", content_id=content_id)
+        return jsonify({
+            "error": "conflict",
+            "message": f"content_id {content_id!r} has already been resolved.",
+        }), 409
+
+    if current["status"] != "under_review":
+        audit.log_rejection(creator_id=reviewer_id, reason="not_under_review", content_id=content_id)
+        return jsonify({
+            "error": "conflict",
+            "message": f"content_id {content_id!r} is not awaiting review.",
+        }), 409
+
+    # overturn-specific shape check - a replacement guess is required so
+    # /content/<id> has something real to show once the old guess is gone.
+    if decision == "overturn" and (not isinstance(corrected_guess, str) or not corrected_guess.strip()):
+        audit.log_rejection(creator_id=reviewer_id, reason="missing_corrected_guess", content_id=content_id)
+        return jsonify({
+            "error": "bad_request",
+            "message": 'Overturning requires a non-empty "corrected_guess".',
+        }), 400
+
+    # work out the guess/label this resolution records - uphold carries the
+    # existing ones forward unchanged, overturn replaces them with the
+    # reviewer's correction (label text derived the same way /submit does).
+    if decision == "uphold":
+        guess = current["guess"]
+        label = current["label"]
+    else:
+        import scoring
+        guess = corrected_guess
+        label = scoring.label_for_guess(corrected_guess)
+
+    # record the resolution and confirm it to the reviewer.
+    audit.log_review(
+        content_id=content_id,
+        reviewer_id=reviewer_id,
+        decision=decision,
+        guess=guess,
+        label=label,
+        notes=notes,
+    )
 
     return jsonify({
         "content_id": content_id,
-        "status": entries[-1].get("status"),
-        "guess": decision.get("guess"),
-        "label": decision.get("label"),
-        "model_score": decision.get("model_score"),
-        "style_score": decision.get("style_score"),
-        "combined_score": decision.get("combined_score"),
+        "status": "resolved",
+        "decision": decision,
+        "guess": guess,
+        "label": label,
+        "message": "Resolution recorded.",
     }), 200
 
 
