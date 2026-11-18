@@ -159,6 +159,14 @@ Given 3 overturn resolutions against items currently `under_review`, each with a
 
 An overturn only means something if it replaces the original call. If `/resolve` returns a success message but the recorded `guess`/`label` doesn't change, the content keeps showing a verdict the reviewer just said was wrong, which is worse than never offering an overturn path at all. This doesn't involve the model in the loop, so there's no reason to accept anything less than 3 of 3.
 
+**Revised target:**
+
+Given 5 overturn resolutions against items currently `under_review`, covering valid `corrected_guess` values of `ai`, `human`, and `unsure`, the resolved `guess` and `label` match each corrected guess exactly, in 5 of 5 trials.
+
+**Why tightened:**
+
+The original target checked only three overturns, so a narrow implementation mistake affecting the same-value count or a fourth correction path could go unnoticed. Five trials cover the three valid values repeatedly and require every correction to replace both fields exactly, with no occasional failure.
+
 ---
 
 ## 4
