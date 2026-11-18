@@ -128,3 +128,54 @@ Criterion 1 only checks one direction: that human writing doesn't get falsely fl
      A number you missed stays where it is, gets diagnosed, and gets a fix
      attempted. That's where the points are.
      ───────────────────────────────────────────────────────────────────────── -->
+
+# Acceptance criteria - Capstone
+
+## 1
+
+Given 3 trials, each submitting and appealing a mix of content_ids (some left `under_review`, some resolved, some never appealed), `GET /queue` includes only the content_ids currently `under_review`, and excludes every `decided` and `resolved` one, in 3 of 3 trials.
+
+**Why this target:**
+
+The queue is the only place a reviewer looks to find work. If a resolved item lingers there, a reviewer could end up re-resolving something already decided. If a legitimately `under_review` item is missing, an appeal just sits with nobody aware it needs a look. Neither failure shows up anywhere else, so this has to be checked directly instead of assumed from `/resolve` behaving correctly. A looser target like 2 of 3 would tolerate a queue that's sometimes wrong about something with no randomness in it at all, there's no model score to blame for a miss here, only the log-reading logic.
+
+---
+
+## 2
+
+Given 3 appeals filed against different content_ids, each at least 1 second apart, `GET /queue` returns them in the order they were filed, oldest first, in 3 of 3 trials.
+
+**Why this target:**
+
+A reviewer working the queue from the top should be working the oldest unresolved appeals first. Otherwise an appeal filed first could end up sitting behind one filed a minute later, with no way for a reviewer to notice. This is a sort over log timestamps, not a scored signal, so there's no reason for it to hold in some trials and not others. There's no case for a looser number either, the timestamps already exist in the log; getting the sort wrong on even one trial out of three would point at a real ordering bug, not noise.
+
+---
+
+## 3
+
+Given 3 overturn resolutions against items currently `under_review`, each with a valid `corrected_guess` (one of `ai`/`human`/`unsure`), the resolved `guess` and `label` match that `corrected_guess` exactly, in 3 of 3 trials.
+
+**Why this target:**
+
+An overturn only means something if it replaces the original call. If `/resolve` returns a success message but the recorded `guess`/`label` doesn't change, the content keeps showing a verdict the reviewer just said was wrong, which is worse than never offering an overturn path at all. This doesn't involve the model in the loop, so there's no reason to accept anything less than 3 of 3.
+
+---
+
+## 4
+
+Given 3 overturn requests against items currently `under_review`, each with a `corrected_guess` value outside `ai`/`human`/`unsure` (e.g. `"banana"`), `/resolve` returns 400 with a JSON error body, never a 500, in 3 of 3 trials.
+
+**Why this target:**
+
+This is the one place in `/resolve` where the shape check and the downstream label lookup can disagree: the current check only confirms `corrected_guess` is a non-empty string, not that it's one of the three real values, so an invalid guess gets past validation and crashes inside `label_for_guess` instead of failing cleanly. This criterion proves the fix closed that gap, rather than just looking fixed on a quick manual try. A looser target, accepting a 500 on an occasional trial, would really be saying a crash is sometimes acceptable, which it never is for bad input, however rare.
+
+---
+
+## 5
+
+Given a content_id currently `under_review`, a rejected `/resolve` attempt against it (e.g. an invalid `decision` value) is made, then `GET /content/<id>` and `GET /queue` are checked again. In 3 of 3 trials, the content_id's reported status is still `under_review` and it still appears in `/queue`, not `rejected`.
+
+**Why this target:**
+
+A failed request should never corrupt the state of the thing it failed to change. Right now, `current_status` trusts the last log entry's `status` field unconditionally, which means a rejected attempt and a real state transition look identical to it. If this fails, the fix is narrow: `current_status` (or `latest_decision`) needs to skip rejection entries the same way it already skips appeal entries when picking the current state, just not when picking the guess/label.
+
