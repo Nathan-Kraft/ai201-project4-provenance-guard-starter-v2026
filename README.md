@@ -1014,12 +1014,7 @@ My five capstone criteria don't directly test the 409 business rules for resolvi
 
 **Instrumentation**
 
-Every `/submit` call writes one line to `logs/audit.jsonl`: a timestamp,
-the input's `content_id` and `creator_id` (the raw text itself lives
-separately in `content_store.jsonl`, kept off git), both signal scores,
-the combined score and label, a `status`, and now a `duration` in seconds,
-the time spent inside the two signals plus combining and labelling. It's
-a file I can read back with `GET /log` or straight off disk, not `print()`.
+Every `/submit` call writes one line to `logs/audit.jsonl`: a timestamp, the input's `content_id` and `creator_id` (the raw text itself lives separately in `content_store.jsonl`, kept off git), both signal scores, the combined score and label, a `status`, and now a `duration` in seconds, the time spent inside the two signals plus combining and labelling. It's a file I can read back with `GET /log` or straight off disk, not `print()`.
 
 Ten real entries, from the cost run below:
 
@@ -1036,21 +1031,254 @@ Ten real entries, from the cost run below:
 {"timestamp": "2026-11-18T08:20:45+00:00", "content_id": "c_df4b96f4b055", "creator_id": "cost-check-9", "guess": "unsure", "model_score": 0.3907, "style_score": 0.6435185185185185, "combined_score": 0.47918648148148146, "label": "We can't confidently tell whether this was written by a person or by AI.", "status": "decided", "duration": 0.056}
 ```
 
-A failed run leaves a record too, instead of vanishing. Here's a real one,
-from testing the unit 8 rate limiter:
+A failed run leaves a record too, instead of vanishing. Here's a real one, from testing the unit 8 rate limiter:
 
 ```json
 {"timestamp": "2026-11-18T07:50:11+00:00", "content_id": null, "creator_id": "ratelimit-check", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
 ```
 
+**Capstone Acceptance Run Log - Current Baseline**
+
+I ran `python run_capstone_eval.py --trials 3 --label before` against the running service at `http://127.0.0.1:5000` on Windows, following the start command in `RUNNING.md`. The two bug fixes described below were already present in this run. Each criterion was run three times. The evaluator's full request and response record is in `results/capstone_run_2026-11-18_1521_before.md`, and it was produced by `run_capstone_eval.py::main`.
+
+The original capstone criteria were committed before the run evidence in commit `a1c8eb1` (`Wrote the 5 new criteria for the Capstone (Unit 9 Milestone 4)`). The revised Criterion 3 target and run evidence should be committed separately, with commit messages that name the revision and run output.
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Queue membership | 3 of 3 trials | PASS | PASS | PASS | MET |
+| 2. Queue ordering | 3 of 3 trials | PASS | PASS | PASS | MET |
+| 3. Overturn replaces state | 3 of 3 trials | PASS | PASS | PASS | MET |
+| 4. Invalid corrected_guess | 3 of 3 trials | PASS | PASS | PASS | MET |
+| 5. Rejected resolve preserves status | 3 of 3 trials | PASS | PASS | PASS | MET |
+
+All five criteria met their targets across all three trials. I do not consider these targets low: these behaviors are deterministic, and accepting even one missed trial out of three would permit a real service bug. There were no misses, so there is no failure stage or mechanism to diagnose.
+
+**Real output from one trial**
+
+**Criterion 1 - queue membership**
+
+From `run_capstone_eval.py::run_queue_membership` in `results/capstone_run_2026-11-18_1521_before.md`, Trial 1:
+
+```json
+{
+  "status": 200,
+  "body": {
+    "count": 19,
+    "queue": [
+      {
+        "content_id": "c_07c4c691b774",
+        "queued_since": "2026-11-18T21:21:01+00:00",
+        "reasoning": "Capstone appeal membership_1_under_review_0."
+      }
+    ]
+  }
+}
+```
+
+This is the `/queue` response portion copied from Trial 1. The trial created one under-review id, resolved two ids, and left one never appealed. The queue response contains `c_07c4c691b774`.
+
+**Criterion 2 - queue ordering**
+
+From `run_capstone_eval.py::run_queue_order` in `results/capstone_run_2026-11-18_1521_before.md`, Trial 1:
+
+```json
+{
+  "status": 200,
+  "body": {
+    "count": 24,
+    "queue": [
+      {
+        "content_id": "c_90aec3050748",
+        "queued_since": "2026-11-18T21:21:07+00:00",
+        "reasoning": "Capstone appeal ordering_1_0."
+      },
+      {
+        "content_id": "c_14f7ef48f8dc",
+        "queued_since": "2026-11-18T21:21:08+00:00",
+        "reasoning": "Capstone appeal ordering_1_1."
+      },
+      {
+        "content_id": "c_204cd0ad283e",
+        "queued_since": "2026-11-18T21:21:09+00:00",
+        "reasoning": "Capstone appeal ordering_1_2."
+      }
+    ]
+  }
+}
+```
+
+**Criterion 3 - overturn replaces state**
+
+From `run_capstone_eval.py::run_overturn` in `results/capstone_run_2026-11-18_1521_before.md`, Trial 1:
+
+```json
+{
+  "resolve": {
+    "status": 200,
+    "body": {
+      "decision": "overturn",
+      "guess": "ai",
+      "label": "Our system's best guess is that this was generated by AI, not written by a person.",
+      "status": "resolved"
+    }
+  },
+  "content": {
+    "status": 200,
+    "body": {
+      "content_id": "c_3a029fd4edf3",
+      "guess": "ai",
+      "label": "Our system's best guess is that this was generated by AI, not written by a person.",
+      "status": "resolved"
+    }
+  }
+}
+```
+
+**Criterion 4 - invalid corrected_guess**
+
+From `run_capstone_eval.py::run_invalid_corrected_guess` in `results/capstone_run_2026-11-18_1521_before.md`, Trial 1:
+
+```json
+{
+  "before": {
+    "status": 200,
+    "body": {
+      "content_id": "c_19cdb46d3378",
+      "guess": "unsure",
+      "label": "We can't confidently tell whether this was written by a person or by AI.",
+      "status": "under_review"
+    }
+  },
+  "resolve": {
+    "status": 400,
+    "body": {
+      "error": "bad_request",
+      "message": "Overturning requires \"corrected_guess\" to be one of \"ai\", \"human\", or \"unsure\"."
+    }
+  },
+  "after": {
+    "status": 200,
+    "body": {
+      "content_id": "c_19cdb46d3378",
+      "guess": "unsure",
+      "label": "We can't confidently tell whether this was written by a person or by AI.",
+      "status": "under_review"
+    }
+  }
+}
+```
+
+**Criterion 5 - rejected resolve preserves status**
+
+From `run_capstone_eval.py::run_rejected_resolve` in `results/capstone_run_2026-11-18_1521_before.md`, Trial 1:
+
+```json
+{
+  "before": {
+    "status": 200,
+    "body": {
+      "content_id": "c_19de52aeb078",
+      "guess": "unsure",
+      "label": "We can't confidently tell whether this was written by a person or by AI.",
+      "status": "under_review"
+    }
+  },
+  "resolve": {
+    "status": 400,
+    "body": {
+      "error": "bad_request",
+      "message": "Send JSON with \"decision\" set to \"uphold\" or \"overturn\"."
+    }
+  },
+  "after": {
+    "status": 200,
+    "body": {
+      "content_id": "c_19de52aeb078",
+      "guess": "unsure",
+      "label": "We can't confidently tell whether this was written by a person or by AI.",
+      "status": "under_review"
+    }
+  },
+  "queue": {
+    "status": 200,
+    "body": {
+      "count": 34
+    }
+  }
+}
+```
+
+**Bug Diagnoses and Fixes**
+
+Two bugs were found while reviewing the capstone implementation before this baseline run.
+
+**Invalid corrected_guess:** `/resolve` originally checked only that `corrected_guess` was a non-empty string. A value such as `"banana"` then reached `scoring.label_for_guess`, which only knows `ai`, `human`, and `unsure`, causing an unhandled `KeyError` and HTTP 500. The route now validates membership in that three-value set and returns HTTP 400.
+
+**Rejected resolve changes queue state:** `audit.current_status()` originally used the literal last log entry for the status. A rejected `/resolve` entry therefore changed an item's reported status to `rejected`, even though the item was still `under_review`, removing it from `/queue`. The status lookup now ignores rejection entries while preserving the rejection in the audit log.
+
+**The Improvement**
+
+**What I changed:** Strengthened the test for Criterion 3. The before run used three overturn resolutions, one for each valid corrected guess. The after run uses five overturn resolutions per trial: `ai`, `human`, `unsure`, `ai`, and `human`.
+
+**Which diagnosis pointed at it:** The target was stricter than the original test data. The baseline run passed three overturn checks, but that sample was too small to catch an occasional wrong guess or label replacement, especially when the three valid values repeat only once. The implementation review also found and fixed two concrete defects: invalid `corrected_guess` values previously reached label lookup and could raise `KeyError` with HTTP 500, and rejected resolution entries could previously overwrite `under_review` status and remove an item from `/queue`. The route now validates the corrected guess, and `audit.current_status()` ignores rejected entries.
+
+**Attack Run — After**
+
+The full capstone service evaluator was rerun instead of the original attack runner because this improvement tests queue and resolution behavior, not detection attacks. `python run_capstone_eval.py --trials 3 --label after` ran every capstone criterion three times. The report is `results/capstone_run_2026-11-18_1543_after.md`.
+
+**Run Log and Verdicts — After**
+
+| Criterion | Target | Run 1 | Run 2 | Run 3 | Verdict |
+|---|---|---|---|---|---|
+| 1. Queue membership | 3 of 3 trials | PASS | PASS | PASS | MET |
+| 2. Queue ordering | 3 of 3 trials | PASS | PASS | PASS | MET |
+| 3. Overturn replaces state | 5 of 5 trials | PASS | PASS | PASS | MET |
+| 4. Invalid corrected_guess | 3 of 3 trials | PASS | PASS | PASS | MET |
+| 5. Rejected resolve preserves status | 3 of 3 trials | PASS | PASS | PASS | MET |
+
+**Did it help, and how do I know:**
+
+It helped Criterion 3's coverage. The after run completed five overturn-and-readback checks in every trial, and all five corrected guesses matched the resolved and readback values in Trial 1. No existing criterion regressed: all three trials for Criteria 1, 2, 4, and 5 remained MET. The implementation itself did not change, so this change has no service-behavior tradeoff.
+
+**Real output from one trial**
+
+**Criterion 3 - overturn replaces state**
+
+From `run_capstone_eval.py::run_overturn` in `results/capstone_run_2026-11-18_1543_after.md`, Trial 1:
+
+```json
+{
+  "checks": [
+    {
+      "corrected_guess": "ai",
+      "matches": true
+    },
+    {
+      "corrected_guess": "human",
+      "matches": true
+    },
+    {
+      "corrected_guess": "unsure",
+      "matches": true
+    },
+    {
+      "corrected_guess": "ai",
+      "matches": true
+    },
+    {
+      "corrected_guess": "human",
+      "matches": true
+    }
+  ],
+  "passed": true
+}
+```
+
 **What It Costs**
 
-There's no API bill here, the model runs on this machine, so the real
-cost is seconds of compute per submission.
+There's no API bill here, the model runs on this machine, so the real cost is seconds of compute per submission.
 
-Measured with `measure_cost.py`: ten real `/submit` calls against the
-running service, reading each one's `duration` field back from
-`logs/audit.jsonl` afterward, not a number from a pricing page.
+Measured with `measure_cost.py`: ten real `/submit` calls against the running service, reading each one's `duration` field back from `logs/audit.jsonl` afterward, not a number from a pricing page.
 
 ```
 run  1: 8.613s
@@ -1074,33 +1302,24 @@ above is pulled up by that one cold start; a steadier answer to "what
 does one submission cost once the service has been running a while" is
 closer to 0.06s.
 
+**What's Still Broken**
+
+No capstone criterion missed. The 409 checks for resolving an already-resolved or never-appealed item are still only a documented gap rather than a direct assertion; Criterion 1 uses those states as setup but does not assert the response status itself. Also since I didn't change the model, most of the still broken parts from the original project are still an issue.
+
 **How I Used AI**
 
 **Moment 1**
 
+*What I asked for:* A review of the review-queue implementation and the five capstone criteria to identify bugs, then a plan for testing those criteria against a running service.
+
+*What came back:* Two likely failure mechanisms were identified: invalid `corrected_guess` values could reach label lookup and cause HTTP 500, and rejected `/resolve` entries could overwrite an under-review item's status in `audit.current_status()`.
+
+*What I changed:* I verified the relevant routes and audit logic, kept the existing fixes, and used those findings to confirm that Criteria 4 and 5 tested real failure handling rather than invented failures.
+
 **Moment 2**
 
+*What I asked for:* A separate evaluator that followed the structure of `run_eval.py`, ran all five capstone criteria three times, and produced a raw before-and-after run record.
 
-**The Improvement**
+*What came back:* `run_capstone_eval.py` with queue membership, queue ordering, overturn, invalid-input, and rejected-resolution scenarios, plus markdown report generation.
 
-**What I changed:**
-
-**Which diagnosis pointed at it:**
-
-**Attack Run — After**
-
-
-
-**Run Log and Verdicts — After**
-
-
-
-**Did it help, and how do I know:**
-
-
-
-**What's Still Broken**
-
-
-
-**Run Log and Verdicts**
+*What I changed:* I ran the evaluator against the local service, checked its five trial summaries, tightened Criterion 3 from three to five overturn resolutions, reran the complete set, and retained the real report files for the README evidence.
