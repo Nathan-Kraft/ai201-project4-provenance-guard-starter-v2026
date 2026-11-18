@@ -207,9 +207,10 @@ def current_status(content_id: str) -> dict | None:
     if not entries:
         return None
     decision = latest_decision(entries)
+    status_entries = [e for e in entries if e.get("event") != "rejected"]
     return {
         "content_id": content_id,
-        "status": entries[-1].get("status"),
+        "status": status_entries[-1].get("status") if status_entries else None,
         "guess": decision.get("guess") if decision else None,
         "label": decision.get("label") if decision else None,
         "model_score": decision.get("model_score") if decision else None,

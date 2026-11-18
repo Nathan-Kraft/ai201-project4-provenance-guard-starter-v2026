@@ -23,7 +23,8 @@ Routes:
     GET  /log         the audit log. Already works
     GET  /health      is the service up, and is the model loaded
 """
-
+import time
+import datetime 
 import uuid
 
 from flask import Flask, jsonify, request
@@ -227,24 +228,41 @@ def submit():
 
     # step 3 - one real signal that we first tested from the terminal. Put the real number in the response, but leave confidence and label as placeholders.
     #python detector.py "some text"
-    import detector
-    model_score=detector.model_signal(text)
+    start = time.perf_counter()
+    try:
+        import detector
+        model_score = detector.model_signal(text)
 
-    # step 5 - the second signal, tested on its own from the terminal first.
-    # python stylometry.py "some text"
-    import stylometry
-    style_score = stylometry.style_signal(text)
+        # step 5 - the second signal, tested on its own from the terminal first.
+        # python stylometry.py "some text"
+        import stylometry
+        style_score = stylometry.style_signal(text)
 
-    # step 6 - combine both signals into one score.
-    import scoring
-    combined_score = scoring.combine_signals(model_score, style_score)
+        # step 6 - combine both signals into one score.
+        import scoring
+        combined_score = scoring.combine_signals(model_score, style_score)
 
-    # step 8 - turn the combined score into a guess and a reader-facing label.
-    guess, label_text = scoring.score_to_label(combined_score)
+        # step 8 - turn the combined score into a guess and a reader-facing label.
+        guess, label_text = scoring.score_to_label(combined_score)
+    except Exception as exc:
+        # A crash here used to leave no trace. An error here is a run too.
+        audit.log_rejection(
+            creator_id=creator_id,
+            reason="signal_error",
+            error=str(exc),
+            duration=round(time.perf_counter() - start, 3),
+        )
+        return jsonify({
+            "error": "signal_error",
+            "message": "Scoring this submission failed.",
+        }), 500
+    duration = round(time.perf_counter() - start, 3)
 
     #step 4 - log the decision. The content_id is what /appeaal needs later,
         #and a student who skips it rebuilds this whole flow later. Use audit.log_decision(...). Log every submission, even the ones that fail validation.
     content_id = f"c_{uuid.uuid4().hex[:12]}"
+    import content_store
+    content_store.save(content_id, text)
     audit.log_decision(
         content_id=content_id,
         creator_id=creator_id,
@@ -254,6 +272,7 @@ def submit():
         combined_score=combined_score,
         label=label_text,
         status="decided",
+        duration=duration,
     )
 
    #step 1 - the route answers. Return a hardcoded response. Confirm `curl` gets it back before you add any logic at all.
@@ -341,6 +360,9 @@ def get_content(content_id):
             "error": "not_found",
             "message": f"No submission found with content_id {content_id!r}."
         }), 404
+
+    import content_store
+    current["text"] = content_store.get(content_id)
 
     return jsonify(current), 200
 
@@ -442,13 +464,15 @@ def resolve(content_id):
             "message": f"content_id {content_id!r} is not awaiting review.",
         }), 409
 
-    # overturn-specific shape check - a replacement guess is required so
-    # /content/<id> has something real to show once the old guess is gone.
-    if decision == "overturn" and (not isinstance(corrected_guess, str) or not corrected_guess.strip()):
-        audit.log_rejection(creator_id=reviewer_id, reason="missing_corrected_guess", content_id=content_id)
+    # overturn-specific shape check - a replacement guess is required, and it
+    # has to be one of the three values label_for_guess knows how to map, so
+    # /content/<id> has something real (and valid) to show once the old
+    # guess is gone.
+    if decision == "overturn" and corrected_guess not in ("ai", "human", "unsure"):
+        audit.log_rejection(creator_id=reviewer_id, reason="invalid_corrected_guess", content_id=content_id)
         return jsonify({
             "error": "bad_request",
-            "message": 'Overturning requires a non-empty "corrected_guess".',
+            "message": 'Overturning requires "corrected_guess" to be one of "ai", "human", or "unsure".',
         }), 400
 
     # work out the guess/label this resolution records - uphold carries the

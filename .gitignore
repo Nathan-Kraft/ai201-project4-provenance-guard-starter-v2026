@@ -21,3 +21,6 @@ Thumbs.db
 # NOTE: logs/ and results/ are deliberately NOT ignored. Your audit log and
 # your attack runs are evidence, and they're part of what gets graded.
 # Commit them.
+
+# Raw submitted text — unlike logs/ and results/, this one stays off git.
+content_store.jsonl

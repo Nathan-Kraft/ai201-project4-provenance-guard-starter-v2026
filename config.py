@@ -126,3 +126,6 @@ RATE_LIMIT_STORAGE = "memory://"
 LOG_DIR = ROOT / "logs"
 AUDIT_LOG = LOG_DIR / "audit.jsonl"
 RESULTS_DIR = ROOT / "results"
+
+# Raw submitted text — kept out of logs/ and out of git. See content_store.py.
+CONTENT_STORE = ROOT / "content_store.jsonl"

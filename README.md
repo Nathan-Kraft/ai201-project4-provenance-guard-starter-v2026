@@ -1010,6 +1010,69 @@ I'm not touching either detection signal or how they're combined. This feature o
 
 I'm not giving the queue a UI. `/queue` and `/resolve/<content_id>` are just routes, tested with curl like everything else here.
 
+My five capstone criteria don't directly test the 409 business rules for resolving an already-resolved or never-appealed content_id. Criterion 1 uses those cases as setup for a queue-membership check, but nothing asserts `/resolve`'s own response in either case. That's a real gap, not a safe one: it's named explicitly in the design plan, and I'm choosing to leave it untested this round rather than cut one of the five that doesn't actually overlap with it.
+
+**Instrumentation**
+
+Every `/submit` call writes one line to `logs/audit.jsonl`: a timestamp,
+the input's `content_id` and `creator_id` (the raw text itself lives
+separately in `content_store.jsonl`, kept off git), both signal scores,
+the combined score and label, a `status`, and now a `duration` in seconds,
+the time spent inside the two signals plus combining and labelling. It's
+a file I can read back with `GET /log` or straight off disk, not `print()`.
+
+Ten real entries, from the cost run below:
+
+```json
+{"timestamp": "2026-11-18T08:20:44+00:00", "content_id": "c_20721703e612", "creator_id": "cost-check-0", "guess": "unsure", "model_score": 0.3907, "style_score": 0.6435185185185185, "combined_score": 0.47918648148148146, "label": "We can't confidently tell whether this was written by a person or by AI.", "status": "decided", "duration": 8.613}
+{"timestamp": "2026-11-18T08:20:44+00:00", "content_id": "c_8f52e872c74d", "creator_id": "cost-check-1", "guess": "unsure", "model_score": 0.3907, "style_score": 0.6435185185185185, "combined_score": 0.47918648148148146, "label": "We can't confidently tell whether this was written by a person or by AI.", "status": "decided", "duration": 0.058}
+{"timestamp": "2026-11-18T08:20:44+00:00", "content_id": "c_253f4ec5a81e", "creator_id": "cost-check-2", "guess": "unsure", "model_score": 0.3907, "style_score": 0.6435185185185185, "combined_score": 0.47918648148148146, "label": "We can't confidently tell whether this was written by a person or by AI.", "status": "decided", "duration": 0.054}
+{"timestamp": "2026-11-18T08:20:44+00:00", "content_id": "c_a71b218c8066", "creator_id": "cost-check-3", "guess": "unsure", "model_score": 0.3907, "style_score": 0.6435185185185185, "combined_score": 0.47918648148148146, "label": "We can't confidently tell whether this was written by a person or by AI.", "status": "decided", "duration": 0.077}
+{"timestamp": "2026-11-18T08:20:44+00:00", "content_id": "c_3ff1d141fd67", "creator_id": "cost-check-4", "guess": "unsure", "model_score": 0.3907, "style_score": 0.6435185185185185, "combined_score": 0.47918648148148146, "label": "We can't confidently tell whether this was written by a person or by AI.", "status": "decided", "duration": 0.061}
+{"timestamp": "2026-11-18T08:20:44+00:00", "content_id": "c_2a22a93575f0", "creator_id": "cost-check-5", "guess": "unsure", "model_score": 0.3907, "style_score": 0.6435185185185185, "combined_score": 0.47918648148148146, "label": "We can't confidently tell whether this was written by a person or by AI.", "status": "decided", "duration": 0.057}
+{"timestamp": "2026-11-18T08:20:45+00:00", "content_id": "c_ad3fa54d4425", "creator_id": "cost-check-6", "guess": "unsure", "model_score": 0.3907, "style_score": 0.6435185185185185, "combined_score": 0.47918648148148146, "label": "We can't confidently tell whether this was written by a person or by AI.", "status": "decided", "duration": 0.059}
+{"timestamp": "2026-11-18T08:20:45+00:00", "content_id": "c_1cf8eff31194", "creator_id": "cost-check-7", "guess": "unsure", "model_score": 0.3907, "style_score": 0.6435185185185185, "combined_score": 0.47918648148148146, "label": "We can't confidently tell whether this was written by a person or by AI.", "status": "decided", "duration": 0.057}
+{"timestamp": "2026-11-18T08:20:45+00:00", "content_id": "c_de222c538200", "creator_id": "cost-check-8", "guess": "unsure", "model_score": 0.3907, "style_score": 0.6435185185185185, "combined_score": 0.47918648148148146, "label": "We can't confidently tell whether this was written by a person or by AI.", "status": "decided", "duration": 0.053}
+{"timestamp": "2026-11-18T08:20:45+00:00", "content_id": "c_df4b96f4b055", "creator_id": "cost-check-9", "guess": "unsure", "model_score": 0.3907, "style_score": 0.6435185185185185, "combined_score": 0.47918648148148146, "label": "We can't confidently tell whether this was written by a person or by AI.", "status": "decided", "duration": 0.056}
+```
+
+A failed run leaves a record too, instead of vanishing. Here's a real one,
+from testing the unit 8 rate limiter:
+
+```json
+{"timestamp": "2026-11-18T07:50:11+00:00", "content_id": null, "creator_id": "ratelimit-check", "guess": null, "model_score": null, "style_score": null, "combined_score": null, "label": null, "status": "rejected", "event": "rejected", "reason": "rate_limited", "limit": "5 per 1 minute"}
+```
+
+**What It Costs**
+
+There's no API bill here, the model runs on this machine, so the real
+cost is seconds of compute per submission.
+
+Measured with `measure_cost.py`: ten real `/submit` calls against the
+running service, reading each one's `duration` field back from
+`logs/audit.jsonl` afterward, not a number from a pricing page.
+
+```
+run  1: 8.613s
+run  2: 0.058s
+run  3: 0.054s
+run  4: 0.077s
+run  5: 0.061s
+run  6: 0.057s
+run  7: 0.059s
+run  8: 0.057s
+run  9: 0.053s
+run 10: 0.056s
+
+10 runs, average 0.914s (min 0.053s, max 8.613s)
+```
+
+Run 1 is the cost of a cold start, the model loading into memory for the
+first time in this process. Every run after that lands around
+0.05-0.08s, since the model stays loaded between requests. The average
+above is pulled up by that one cold start; a steadier answer to "what
+does one submission cost once the service has been running a while" is
+closer to 0.06s.
 
 **How I Used AI**
 

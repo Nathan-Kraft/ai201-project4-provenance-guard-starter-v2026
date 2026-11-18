@@ -306,3 +306,135 @@ is evidence, and the entries you paste into your README are what unit 8 grades.
 
 **Do not delete and recreate this repository.** You submit the same URL both
 units.
+
+---
+
+## How to reach it
+
+There's no public URL for this one. See "This project will not fit a free
+host" above for why. Here's the exact command and what the environment
+needs instead.
+
+**Start command:**
+
+```bash
+python app.py
+```
+
+**What the environment needs:**
+
+| Needs | Why |
+|---|---|
+| Python 3.11, 3.12, or 3.13 (not 3.14) | pinned in `requirements.txt`, untested on 3.14 |
+| A venv with `pip install -r requirements.txt` | flask, flask-limiter, transformers, torch, gunicorn, requests, pytest |
+| ~550 MB free disk, once | `python detector.py` downloads the model the first time |
+| Enough RAM to hold the model | see the memory table under "This project will not fit a free host" above |
+
+With no environment variables set you get `http://127.0.0.1:5000`, and
+every `curl` command in this file works unchanged.
+
+---
+
+## Running the extensions and tests
+
+**The test suite** (unit 9 capstone, route-level tests for the review queue):
+
+```bash
+pytest test_app.py
+```
+
+No server needs to be running. It uses Flask's own test client, the same
+way `test.py` checks `/ping`. Each test starts from a clean, throwaway audit
+log, so it never touches your real `logs/audit.jsonl`.
+
+**The review queue CLI** (`review_cli.py`, works the `/queue` to `/resolve`
+flow from a terminal instead of hand-typing `curl` for every resolution):
+
+```bash
+python app.py                 # in one terminal
+python review_cli.py          # in another
+```
+
+It asks for a reviewer id once, then shows you one queued item at a time:
+the submitted text, both signal scores, and the writer's appeal reasoning,
+and asks you to uphold, overturn, or skip. `q` quits any time; whatever you
+haven't resolved just stays in the queue for next run.
+
+> **Rate limiting is on by default in this checked-in `config.py`**: 5
+> submissions a minute per `creator_id`. `/resolve` itself isn't limited,
+> but if you submit and appeal several test items in a row to populate the
+> queue, you'll get a `429` on the sixth submission inside a minute. That's
+> the limiter working as configured, not a bug in the CLI. Space out your
+> test submissions, or raise `RATE_LIMIT_PER_MINUTE` in `config.py` while
+> you're trying it out.
+
+---
+
+## Walking through an appeal, step by step
+
+Two examples below, so you end up with one item to uphold and one to
+overturn, and can see both paths through `review_cli.py`.
+
+**1. Start the service.**
+
+```bash
+python app.py
+```
+
+**2. In a second terminal, submit the first example.**
+
+```bash
+curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d "{\"text\": \"The quick brown fox jumps over the lazy dog near the old stone bridge every morning before sunrise.\", \"creator_id\": \"example-writer-1\"}"
+```
+
+Copy the `content_id` out of the response (it looks like `c_e9f5458860ba`).
+You'll need it in the next step.
+
+**3. File an appeal against it.**
+
+```bash
+curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d "{\"content_id\": \"PASTE_CONTENT_ID_HERE\", \"reasoning\": \"I wrote every word of this myself, it's about my daily walk.\"}"
+```
+
+**4. Submit and appeal the second example the same way.**
+
+```bash
+curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d "{\"text\": \"This text is short and uses plain words because I am still learning this language and stick to words I know well.\", \"creator_id\": \"example-writer-2\"}"
+```
+
+```bash
+curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d "{\"content_id\": \"PASTE_SECOND_CONTENT_ID_HERE\", \"reasoning\": \"This flagged as AI, but I'm a non-native speaker who writes in short, plain sentences.\"}"
+```
+
+**5. Check both landed in the queue.**
+
+```bash
+curl.exe http://127.0.0.1:5000/queue
+```
+
+You should see two items, oldest first.
+
+**6. Review them with `review_cli.py`.**
+
+```bash
+python review_cli.py
+```
+
+Enter a reviewer id, then work the two items:
+
+- First item (the fox sentence): type `u` to uphold the original guess.
+- Second item (the plain-language one): type `o` to overturn, then enter
+  `human` when it asks for the corrected guess, since this is the signal-one
+  blind spot named earlier in this file.
+
+Add a note if you want one, then press enter to send each resolution.
+
+**7. Confirm the resolutions stuck.**
+
+```bash
+curl.exe http://127.0.0.1:5000/content/PASTE_CONTENT_ID_HERE
+```
+
+Status should now read `resolved`, with the original guess kept for the
+upheld item and `human` for the overturned one.
+
