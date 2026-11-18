@@ -309,6 +309,8 @@ units.
 
 ---
 
+**Capstone**
+
 ## How to reach it
 
 There's no public URL for this one. See "This project will not fit a free
@@ -375,6 +377,8 @@ haven't resolved just stays in the queue for next run.
 Two examples below, so you end up with one item to uphold and one to
 overturn, and can see both paths through `review_cli.py`.
 
+**NOTE** Written using a Windows machine. Change commands accordingly for other operating systems. 
+
 **1. Start the service.**
 
 ```bash
@@ -387,7 +391,7 @@ python app.py
 curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d "{\"text\": \"The quick brown fox jumps over the lazy dog near the old stone bridge every morning before sunrise.\", \"creator_id\": \"example-writer-1\"}"
 ```
 
-Copy the `content_id` out of the response (it looks like `c_e9f5458860ba`).
+Copy the `content_id` out of the response in the terminal (it looks like `c_e9f5458860ba`).
 You'll need it in the next step.
 
 **3. File an appeal against it.**
