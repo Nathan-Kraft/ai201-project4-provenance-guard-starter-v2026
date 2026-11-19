@@ -388,7 +388,7 @@ python app.py
 **2. In a second terminal, submit the first example.**
 
 ```bash
-curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d "{\"text\": \"The quick brown fox jumps over the lazy dog near the old stone bridge every morning before sunrise.\", \"creator_id\": \"example-writer-1\"}"
+curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{\"text\": \"The quick brown fox jumps over the lazy dog near the old stone bridge every morning before sunrise.\", \"creator_id\": \"example-writer-1\"}'
 ```
 
 Copy the `content_id` out of the response in the terminal (it looks like `c_e9f5458860ba`).
@@ -397,17 +397,17 @@ You'll need it in the next step.
 **3. File an appeal against it.**
 
 ```bash
-curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d "{\"content_id\": \"PASTE_CONTENT_ID_HERE\", \"reasoning\": \"I wrote every word of this myself, it's about my daily walk.\"}"
+curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{\"content_id\": \"PASTE_CONTENT_ID_HERE\", \"reasoning\": \"I wrote every word of this myself, it's about my daily walk.\"}'
 ```
 
 **4. Submit and appeal the second example the same way.**
 
 ```bash
-curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d "{\"text\": \"This text is short and uses plain words because I am still learning this language and stick to words I know well.\", \"creator_id\": \"example-writer-2\"}"
+curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json" -d '{\"text\": \"This text is short and uses plain words because I am still learning this language and stick to words I know well.\", \"creator_id\": \"example-writer-2\"}'
 ```
 
 ```bash
-curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d "{\"content_id\": \"PASTE_SECOND_CONTENT_ID_HERE\", \"reasoning\": \"This flagged as AI, but I'm a non-native speaker who writes in short, plain sentences.\"}"
+curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{\"content_id\": \"PASTE_SECOND_CONTENT_ID_HERE\", \"reasoning\": \"This flagged as AI, but I'm a non-native speaker who writes in short, plain sentences.\"}'
 ```
 
 **5. Check both landed in the queue.**
