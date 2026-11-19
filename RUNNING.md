@@ -397,7 +397,7 @@ You'll need it in the next step.
 **3. File an appeal against it.**
 
 ```bash
-curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{\"content_id\": \"PASTE_CONTENT_ID_HERE\", \"reasoning\": \"I wrote every word of this myself, it's about my daily walk.\"}'
+curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{\"content_id\": \"c_fe6dc514719d\", \"reasoning\": \"I wrote every word of this myself, it is about my daily walk.\"}'
 ```
 
 **4. Submit and appeal the second example the same way.**
@@ -407,7 +407,7 @@ curl.exe -X POST http://127.0.0.1:5000/submit -H "Content-Type: application/json
 ```
 
 ```bash
-curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{\"content_id\": \"PASTE_SECOND_CONTENT_ID_HERE\", \"reasoning\": \"This flagged as AI, but I'm a non-native speaker who writes in short, plain sentences.\"}'
+curl.exe -X POST http://127.0.0.1:5000/appeal -H "Content-Type: application/json" -d '{\"content_id\": \"c_0d81fcd4ded6\", \"reasoning\": \"This flagged as AI, but I am a non-native speaker who writes in short, plain sentences.\"}'
 ```
 
 **5. Check both landed in the queue.**
